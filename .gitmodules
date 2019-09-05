@@ -1,3 +1,0 @@
-[submodule "deps/sleepy-discord"]
-	path = deps/sleepy-discord
-	url = https://gitlab.com/alynel/sleepy-discord.git
