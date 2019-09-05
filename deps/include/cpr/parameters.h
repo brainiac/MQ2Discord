@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-#include "cpr/defines.h"
+#include "defines.h"
 
 namespace cpr {
 

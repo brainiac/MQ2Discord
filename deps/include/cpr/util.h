@@ -4,7 +4,8 @@
 #include <string>
 #include <vector>
 
-#include "cpr/cprtypes.h"
+#include "cprtypes.h"
+
 
 namespace cpr {
 namespace util {

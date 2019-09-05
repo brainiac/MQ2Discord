@@ -197,7 +197,8 @@ namespace SleepyDiscord {
 		void setShardID(int _shardID, int _shardCount); //Note: must be called before run or reconnect
 		void quit() { quit(false); }	//public function for diconnecting
 		virtual void run();
-		virtual void poll() { };
+		virtual void poll();
+
 
 		//time
 		enum AssignmentType : bool {

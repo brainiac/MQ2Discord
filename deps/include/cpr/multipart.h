@@ -7,7 +7,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "cpr/defines.h"
+#include "defines.h"
 
 namespace cpr {
 
