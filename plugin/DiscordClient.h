@@ -10,7 +10,7 @@
 #include <queue>
 #include <sleepy_discord\websocketpp_websocket.h>
 #include "Config.h"
-#include "../Blech/Blech.h"
+#include "Blech/Blech.h"
 
 unsigned int __stdcall MQ2DataVariableLookup(char * VarName, char * Value, size_t ValueLen);
 

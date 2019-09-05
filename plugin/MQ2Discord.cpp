@@ -9,15 +9,19 @@
 // Even with this pragma push/pop, having headers for both included in the same cpp causes stack corruption :(
 // So this file contains MQ2 stuff, other file contains discord stuff
 #pragma pack(push, 4)
-#include "../MQ2Plugin.h"
+#include "MQ2Plugin.h"
 #pragma pack(pop)
 
 PreSetup("MQ2Discord");
 PLUGIN_VERSION(1.0);
 
+#ifdef _USE_32BIT_TIME_T
+#endif
 // MQ2Main isn't nice enough to export this
 unsigned int __stdcall MQ2DataVariableLookup(char * VarName, char * Value, size_t ValueLen)
 {
+	std::time_t testtime;
+	
 	strcpy_s(Value, ValueLen, VarName);
 	if (!pLocalPlayer)
 		return strlen(Value);
