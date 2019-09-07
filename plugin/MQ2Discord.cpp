@@ -9,7 +9,7 @@
 // Even with this pragma push/pop, having headers for both included in the same cpp causes stack corruption :(
 // So this file contains MQ2 stuff, other file contains discord stuff
 #pragma pack(push, 4)
-#include "MQ2Plugin.h"
+#include <MQ2Plugin.h>
 #pragma pack(pop)
 
 PreSetup("MQ2Discord");
