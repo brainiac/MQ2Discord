@@ -122,7 +122,7 @@ namespace SleepyDiscord {
 			return operator==<Derived>(right);
 		}
 
-		inline const time_t getTimestamp() {
+		inline const uint64_t getTimestamp() {
 			return ID.timestamp();
 		}
 	};

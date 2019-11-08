@@ -25,7 +25,7 @@ namespace SleepyDiscord {
 
 		void run();
 		void poll();
-		Timer schedule(std::function<void()> code, const time_t milliseconds);
+		Timer schedule(std::function<void()> code, const uint64_t milliseconds);
 	protected:
 #include "standard_config_header.h"
 	private:

@@ -60,7 +60,7 @@ namespace SleepyDiscord {
 
 	private:
 		std::string raw;
-		static const time_t discordEpoch = 1420070400000;	//the first second of 2015 since epoch
+		static const uint64_t discordEpoch = 1420070400000;	//the first second of 2015 since epoch
 	};
 
 	template <typename DiscordOject>

@@ -206,18 +206,18 @@ namespace SleepyDiscord {
 			EpochTime  = 1,
 		};
 		typedef std::function<void()> TimedTask;
-		virtual Timer  schedule(TimedTask                 code   , const time_t millisecondsTilDueTime) { return Timer([](){}); }
-		inline  Timer  schedule(TimedTask                 code   , const time_t milliseconds, AssignmentType mode) {
+		virtual Timer  schedule(TimedTask                 code   , const uint64_t millisecondsTilDueTime) { return Timer([](){}); }
+		inline  Timer  schedule(TimedTask                 code   , const uint64_t milliseconds, AssignmentType mode) {
 			return     schedule(code, mode == TilDueTime ? milliseconds : milliseconds - getEpochTimeMillisecond());
 		}
-		inline  Timer  schedule(void (BaseDiscordClient::*code)(), const time_t milliseconds, AssignmentType mode = TilDueTime) {
+		inline  Timer  schedule(void (BaseDiscordClient::*code)(), const uint64_t milliseconds, AssignmentType mode = TilDueTime) {
 			return     schedule(std::bind(code, this), milliseconds, mode);
 		}
 		inline  void  unschedule(const Timer& timer) const { timer.stop(); }
 	protected:
 		//Rest events
-		virtual void onDepletedRequestSupply(time_t timeTilRetry, Request request);
-		virtual void onExceededRateLimit(bool global, time_t timeTilRetry, Request request);
+		virtual void onDepletedRequestSupply(uint64_t timeTilRetry, Request request);
+		virtual void onExceededRateLimit(bool global, uint64_t timeTilRetry, Request request);
 
 		/* list of events
 		READY
@@ -333,7 +333,7 @@ namespace SleepyDiscord {
 		virtual void disconnect(unsigned int code, const std::string reason) {}
 		void reconnect(const unsigned int status = 1000);
 		virtual void runAsync();
-		virtual const time_t getEpochTimeMillisecond();
+		virtual const uint64_t getEpochTimeMillisecond();
 		
 	private:
 		int heartbeatInterval = 0;
@@ -374,7 +374,7 @@ namespace SleepyDiscord {
 		void quit(bool isRestarting, bool isDisconnected = false);
 		void disconnectWebsocket(unsigned int code, const std::string reason = "");
 		bool sendL(std::string message);    //the L stands for Limited
-		int64_t nextHalfMin = 0;
+		uint64_t nextHalfMin = 0;
 
 		//Cache
 		std::shared_ptr<ServerCache> serverCache;
@@ -382,8 +382,8 @@ namespace SleepyDiscord {
 		//rate limiting
 		int8_t messagesRemaining;
 		bool isGlobalRateLimited = false;
-		time_t nextRetry = 0;
-		std::unordered_map<std::string, time_t> buckets;
+		uint64_t nextRetry = 0;
+		std::unordered_map<std::string, uint64_t> buckets;
 
 		//error handling
 		void setError(int errorCode);
@@ -400,17 +400,17 @@ namespace SleepyDiscord {
 	  */
 	class AssignmentBasedDiscordClient : public BaseDiscordClient {
 	public:
-		Timer schedule(TimedTask code, const time_t milliseconds);
+		Timer schedule(TimedTask code, const uint64_t milliseconds);
 	protected:
 		void resumeMainLoop();
-		virtual int setDoAssignmentTimer(const time_t milliseconds); //call doAssignment in x milliseconds
+		virtual int setDoAssignmentTimer(const uint64_t milliseconds); //call doAssignment in x milliseconds
 		virtual void stopDoAssignmentTimer(const int jobID) {}
 		void doAssignment();
 	private:
 		struct Assignment {
 			int jobID;
 			TimedTask function;
-			time_t dueTime;
+			uint64_t dueTime;
 		};
 		std::forward_list<Assignment> assignments;
 

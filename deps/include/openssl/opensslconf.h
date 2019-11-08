@@ -118,8 +118,8 @@ extern "C" {
 
 #if !(defined(VMS) || defined(__VMS)) /* VMS uses logical names instead */
 #if defined(HEADER_CRYPTLIB_H) && !defined(OPENSSLDIR)
-#define ENGINESDIR "C:/Users/Tim/source/repos/vcpkg/packages/openssl-windows_x86-windows-static/lib/engines"
-#define OPENSSLDIR "C:/Users/Tim/source/repos/vcpkg/packages/openssl-windows_x86-windows-static"
+#define ENGINESDIR "C:/Users/Tim/source/repos/vcpkg/packages/openssl-windows_x86-windows/lib/engines"
+#define OPENSSLDIR "C:/Users/Tim/source/repos/vcpkg/packages/openssl-windows_x86-windows"
 #endif
 #endif
 

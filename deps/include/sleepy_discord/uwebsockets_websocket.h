@@ -12,7 +12,7 @@ namespace SleepyDiscord {
 		UWebSocketsDiscordClient(const std::string token, const char numOfThreads = 3);
 		~UWebSocketsDiscordClient();
 		void run();
-		Timer schedule(std::function<void()> code, const time_t milliseconds);
+		Timer schedule(std::function<void()> code, const uint64_t milliseconds);
 	protected:
 #include "standard_config_header.h"
 	private:
