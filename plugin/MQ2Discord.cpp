@@ -227,12 +227,12 @@ DiscordConfig GetConfig()
 {
 	// Load existing config if it exists
 	const auto configFile = std::string(gszINIPath) + "\\MQ2Discord.yaml";
-	if (std::experimental::filesystem::exists(configFile))
+	if (std::filesystem::exists(configFile))
 		return YAML::LoadFile(configFile).as<DiscordConfig>();
 
 	// If old .json configs exist, convert them
 	std::map<std::string, YAML::Node> jsonConfigs;
-	for (const auto & file : std::experimental::filesystem::directory_iterator(gszINIPath))
+	for (const auto & file : std::filesystem::directory_iterator(gszINIPath))
 	{
 		const auto filename = file.path().filename().string();
 		const std::regex re("MQ2Discord_(.*)\\.json");
