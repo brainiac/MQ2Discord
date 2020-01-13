@@ -226,13 +226,13 @@ void WriteConfig(const DiscordConfig& config, const std::string& filename)
 DiscordConfig GetConfig()
 {
 	// Load existing config if it exists
-	const auto configFile = std::string(gszINIPath) + "\\MQ2Discord.yaml";
+	const std::filesystem::path configFile = std::filesystem::path(gPathConfig) / "MQ2Discord.yaml";
 	if (std::filesystem::exists(configFile))
-		return YAML::LoadFile(configFile).as<DiscordConfig>();
+		return YAML::LoadFile(configFile.string()).as<DiscordConfig>();
 
 	// If old .json configs exist, convert them
 	std::map<std::string, YAML::Node> jsonConfigs;
-	for (const auto & file : std::filesystem::directory_iterator(gszINIPath))
+	for (const auto & file : std::filesystem::directory_iterator(gPathConfig))
 	{
 		const auto filename = file.path().filename().string();
 		const std::regex re("MQ2Discord_(.*)\\.json");
@@ -276,7 +276,7 @@ DiscordConfig GetConfig()
 
 		if (imported)
 		{
-			WriteConfig(config, configFile);
+			WriteConfig(config, configFile.string());
 			return config;
 		}
 	}
@@ -284,7 +284,7 @@ DiscordConfig GetConfig()
 	// Otherwise, create a default config
 	DiscordConfig config;
 	SetDefaults(config);
-	WriteConfig(config, configFile);
+	WriteConfig(config, configFile.string());
 	OutputNormal("Created a default configuration. Edit this, then do \ag/discord reload");
 	return config;
 }
