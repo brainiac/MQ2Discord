@@ -43,6 +43,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <AdditionalIncludeDirectories>$(ProjectDir)..\deps\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <AdditionalDependencies>yaml-cpp.lib;sleepy_discord.lib;zlib.lib;cpr.lib;libcurl.lib;libeay32.lib;ssleay32.lib;crypt32.lib;winmm.lib;wldap32.lib;%(AdditionalDependencies)</AdditionalDependencies>
