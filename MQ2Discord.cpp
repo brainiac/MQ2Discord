@@ -1,3 +1,5 @@
+#define NONEXISTENT_OPUS
+
 #include "DiscordClient.h"
 #include "Config.h"
 #include <fstream>
@@ -8,9 +10,9 @@
 // Sleepy discord library is compiled with default struct align, MQ2 needs 4 byte
 // Even with this pragma push/pop, having headers for both included in the same cpp causes stack corruption :(
 // So this file contains MQ2 stuff, other file contains discord stuff
-#pragma pack(push, 4)
+//#pragma pack(push, 4)
 #include <mq/Plugin.h>
-#pragma pack(pop)
+//#pragma pack(pop)
 
 PreSetup("MQ2Discord");
 PLUGIN_VERSION(1.0);
@@ -37,8 +39,10 @@ DWORD mainThreadId;
 
 PLUGIN_API VOID InitializePlugin(VOID)
 {
+	DebugSpewAlways("Test");
+	WriteChatf("Test");
 	mainThreadId = GetCurrentThreadId();
-	AddCommand("/discord", DiscordCmd, 0, 0, 1);
+	AddCommand("/discord", DiscordCmd, false, false, true);
 }
 
 PLUGIN_API VOID ShutdownPlugin(VOID)
@@ -227,7 +231,8 @@ DiscordConfig GetConfig()
 {
 	// Load existing config if it exists
 	const std::filesystem::path configFile = std::filesystem::path(gPathConfig) / "MQ2Discord.yaml";
-	if (std::filesystem::exists(configFile))
+	std::error_code ec_exists;
+	if (std::filesystem::exists(configFile, ec_exists))
 		return YAML::LoadFile(configFile.string()).as<DiscordConfig>();
 
 	// If old .json configs exist, convert them

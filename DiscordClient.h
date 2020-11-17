@@ -290,7 +290,7 @@ namespace MQ2Discord
 			case SleepyDiscord::INVALID_SHARD: return "INVALID_SHARD";
 			case SleepyDiscord::SHARDING_REQUIRED: return "SHARDING_REQUIRED";
 			case SleepyDiscord::UNKNOWN_PROTOCOL: return "UNKNOWN_PROTOCOL";
-			case SleepyDiscord::DISCONNECTED: return "DISCONNECTED";
+			case SleepyDiscord::DISALLOWED_INTENTS: return "DISALLOWED_INTENTS";
 			case SleepyDiscord::VOICE_SERVER_CRASHED: return "VOICE_SERVER_CRASHED";
 			case SleepyDiscord::UNKNOWN_ENCRYPTION_MODE: return "UNKNOWN_ENCRYPTION_MODE";
 			case SleepyDiscord::CONNECT_FAILED: return "CONNECT_FAILED";
@@ -333,7 +333,7 @@ namespace MQ2Discord
 			case SleepyDiscord::INVALID_SHARD: return "You sent us an invalid shard when identifying.";
 			case SleepyDiscord::SHARDING_REQUIRED: return "The session would have handled too many guilds - you are required to shard your connection in order to connect.";
 			case SleepyDiscord::UNKNOWN_PROTOCOL: return "We didn't recognize the protocol you sent.";
-			case SleepyDiscord::DISCONNECTED: return "Oh no! You've been disconnected! Try resuming.";
+			case SleepyDiscord::DISALLOWED_INTENTS: return "Oh no! You sent a disallowed intent for a gateway (Whatever that means).";
 			case SleepyDiscord::VOICE_SERVER_CRASHED: return "The server crashed. Our bad! Try resuming.";
 			case SleepyDiscord::UNKNOWN_ENCRYPTION_MODE: return "We didn't recognize your encryption.";
 			case SleepyDiscord::CONNECT_FAILED: return "Failed to connect to the Discord api after 4 trys";
