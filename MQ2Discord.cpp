@@ -48,7 +48,9 @@ PLUGIN_API VOID InitializePlugin(VOID)
 PLUGIN_API VOID ShutdownPlugin(VOID)
 {
 	if (client)
+	{
 		client.reset();
+	}
 	RemoveCommand("/discord");
 }
 
@@ -92,22 +94,28 @@ PLUGIN_API VOID OnPulse(VOID)
 
 PLUGIN_API DWORD OnWriteChatColor(PCHAR Line, DWORD Color, DWORD Filter)
 {
-	if (client && !disabled)
+	if (client && !disabled && GetGameState() == GAMESTATE_INGAME)
+	{
 		client->enqueueIfMatch(Line);
+	}
     return 0;
 }
 
 PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 {
-	if (client && !disabled)
+	if (client && !disabled && GetGameState() == GAMESTATE_INGAME)
+	{
 		client->enqueueIfMatch(Line);
+	}
     return 0;
 }
 
 PLUGIN_API VOID SetGameState(DWORD GameState)
 {
 	if (GameState == GAMESTATE_INGAME)
+	{
 		Reload();
+	}
 	else
 	{
 		if (client)
