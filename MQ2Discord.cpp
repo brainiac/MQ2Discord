@@ -37,7 +37,7 @@ std::queue<std::string> messages;
 std::mutex messagesMutex;
 DWORD mainThreadId;
 
-PLUGIN_API VOID InitializePlugin(VOID)
+PLUGIN_API void InitializePlugin()
 {
 	DebugSpewAlways("Test");
 	WriteChatf("Test");
@@ -45,7 +45,7 @@ PLUGIN_API VOID InitializePlugin(VOID)
 	AddCommand("/discord", DiscordCmd, false, false, true);
 }
 
-PLUGIN_API VOID ShutdownPlugin(VOID)
+PLUGIN_API void ShutdownPlugin()
 {
 	if (client)
 	{
@@ -54,7 +54,7 @@ PLUGIN_API VOID ShutdownPlugin(VOID)
 	RemoveCommand("/discord");
 }
 
-PLUGIN_API VOID OnPulse(VOID)
+PLUGIN_API void OnPulse()
 {
 	// Execute any queued commands
 	while (true)
@@ -92,25 +92,25 @@ PLUGIN_API VOID OnPulse(VOID)
 
 }
 
-PLUGIN_API DWORD OnWriteChatColor(PCHAR Line, DWORD Color, DWORD Filter)
+PLUGIN_API void OnWriteChatColor(const char* Line, int Color, int Filter)
 {
 	if (client && !disabled && GetGameState() == GAMESTATE_INGAME)
 	{
 		client->enqueueIfMatch(Line);
 	}
-    return 0;
 }
 
-PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
+PLUGIN_API bool OnIncomingChat(const char* Line, DWORD Color)
 {
 	if (client && !disabled && GetGameState() == GAMESTATE_INGAME)
 	{
 		client->enqueueIfMatch(Line);
+	    return true;
 	}
-    return 0;
+	return false;
 }
 
-PLUGIN_API VOID SetGameState(DWORD GameState)
+PLUGIN_API void SetGameState(int GameState)
 {
 	if (GameState == GAMESTATE_INGAME)
 	{

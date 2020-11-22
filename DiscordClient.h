@@ -78,9 +78,9 @@ namespace MQ2Discord
 		{
 			// Clear results & set every channel to no match initially
 			_filterMatches.clear();
-			for (auto channelIt = _channels.begin(); channelIt != _channels.end(); ++channelIt)
-				_filterMatches[&(*channelIt)] = FilterMatch::None;
-			;
+			for (const auto& _channel : _channels)
+				_filterMatches[&_channel] = FilterMatch::None;
+
 			// Feed the message through the parser. Colour codes are removed beforehand.
 			char buffer[2048] = { 0 };
 			strcpy_s(buffer, std::regex_replace(message, std::regex("\a\\-?."), "").c_str());
@@ -88,14 +88,17 @@ namespace MQ2Discord
 
 			// Send to any channels that matched
 			for (auto kvp : _filterMatches)
-				if (kvp.first->show_command_response > 0 
+				if ((kvp.first->show_command_response > 0
 						&& _responseExpiryTimes.find(kvp.first) != _responseExpiryTimes.end() 
 						&& _responseExpiryTimes[kvp.first] > std::chrono::system_clock::now())
+					|| kvp.second == FilterMatch::Allow)
+				{
 					enqueue(kvp.first->id, _parseMacroData(kvp.first->prefix) + escape_discord(message));
+				}
 				else if (kvp.second == FilterMatch::Notify)
+				{
 					enqueue(kvp.first->id, _parseMacroData(kvp.first->prefix) + escape_discord(message) + " @everyone");
-				else if (kvp.second == FilterMatch::Allow)
-					enqueue(kvp.first->id, _parseMacroData(kvp.first->prefix) + escape_discord(message));
+				}
 		}
 
 	private:
@@ -290,6 +293,7 @@ namespace MQ2Discord
 			case SleepyDiscord::INVALID_SHARD: return "INVALID_SHARD";
 			case SleepyDiscord::SHARDING_REQUIRED: return "SHARDING_REQUIRED";
 			case SleepyDiscord::UNKNOWN_PROTOCOL: return "UNKNOWN_PROTOCOL";
+			case SleepyDiscord::INVALID_INTENTS: return "INVALID_INTENTS";
 			case SleepyDiscord::DISALLOWED_INTENTS: return "DISALLOWED_INTENTS";
 			case SleepyDiscord::VOICE_SERVER_CRASHED: return "VOICE_SERVER_CRASHED";
 			case SleepyDiscord::UNKNOWN_ENCRYPTION_MODE: return "UNKNOWN_ENCRYPTION_MODE";
@@ -333,6 +337,7 @@ namespace MQ2Discord
 			case SleepyDiscord::INVALID_SHARD: return "You sent us an invalid shard when identifying.";
 			case SleepyDiscord::SHARDING_REQUIRED: return "The session would have handled too many guilds - you are required to shard your connection in order to connect.";
 			case SleepyDiscord::UNKNOWN_PROTOCOL: return "We didn't recognize the protocol you sent.";
+			case SleepyDiscord::INVALID_INTENTS: return "Oh no! You sent an invalid intent for a gateway (Whatever that means).";
 			case SleepyDiscord::DISALLOWED_INTENTS: return "Oh no! You sent a disallowed intent for a gateway (Whatever that means).";
 			case SleepyDiscord::VOICE_SERVER_CRASHED: return "The server crashed. Our bad! Try resuming.";
 			case SleepyDiscord::UNKNOWN_ENCRYPTION_MODE: return "We didn't recognize your encryption.";
@@ -420,7 +425,7 @@ namespace MQ2Discord
 					try
 					{
 						if (++count % 60 == 0 && !client.isRateLimited())
-							for (auto channel : _channels)
+							for (const auto& channel : _channels)
 								client.sendTyping(channel.id);
 					}
 					// This is not so critical that it should shut things down if it doesn't work
@@ -438,14 +443,15 @@ namespace MQ2Discord
 							message = _messages.front();
 							_messages.pop();
 						}
-						combinedMessages[std::get<0>(message)] += escape_json(std::get<1>(message) + "\n");
+						//combinedMessages[std::get<0>(message)] += escape_json(std::get<1>(message) + "\n");
+						combinedMessages[std::get<0>(message)] += std::get<1>(message) + '\n';
 
 						// If the message is too long, send what we currently have and grab the rest the next go through
 						if (combinedMessages[std::get<0>(message)].length() > 1800)
 							break;
 					}
 
-					for (auto kvp : combinedMessages)
+					for (const auto& kvp : combinedMessages)
 					{
 						while (true)
 						{
@@ -471,6 +477,7 @@ namespace MQ2Discord
 					client.poll();
 					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 				}
+				_writeNormal("Disconnecting...");
 			}
 			catch (std::exception& e)
 			{
