@@ -1,0 +1,11 @@
+{
+    "name": "mq2discord",
+    "version-string": "0",
+    "dependencies": [
+        "yaml-cpp",
+        {
+            "name": "sleepy-discord",
+            "features": [ "websocketpp" ]
+        }
+    ]
+}
