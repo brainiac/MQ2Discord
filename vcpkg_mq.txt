@@ -1,0 +1,2 @@
+sleepy-discord[websocketpp]
+yaml-cpp
