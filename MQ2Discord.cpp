@@ -1,4 +1,6 @@
 #define NONEXISTENT_OPUS
+#define _SILENCE_CXX17_C_HEADER_DEPRECATION_WARNING
+#define _SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING
 
 #include "DiscordClient.h"
 #include "Config.h"
@@ -39,8 +41,6 @@ DWORD mainThreadId;
 
 PLUGIN_API void InitializePlugin()
 {
-	DebugSpewAlways("Test");
-	WriteChatf("Test");
 	mainThreadId = GetCurrentThreadId();
 	AddCommand("/discord", DiscordCmd, false, false, true);
 }
@@ -215,7 +215,7 @@ void SetDefaults(DiscordConfig& config)
 	group.channels.emplace_back(groupChannel);
 	config.groups.emplace_back(group);
 
-	// A channel for all characters that relays tells. 
+	// A channel for all characters that relays tells.
 	ChannelConfig tellsChannel;
 	tellsChannel.name = "TellsChannel";
 	tellsChannel.id = "YourChannelForTellsHere";
