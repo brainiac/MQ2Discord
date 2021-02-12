@@ -369,10 +369,13 @@ void Reload()
 
 	for (auto &channel : channels)
 	{
-		// Make prefixes end with a space if they don't already
-		if (*channel.prefix.end() != ' ')
-			channel.prefix.push_back(' ');
-		channel.prefix = ParseMacroDataString(channel.prefix);
+		if (!channel.prefix.empty())
+		{
+			// Make prefixes end with a space if they don't already
+			if (channel.prefix.back() != ' ')
+				channel.prefix.append(" ");
+			channel.prefix = ParseMacroDataString(channel.prefix);
+		}
 
 		// Add #*# at the start/end of any filters that don't have it already
 		for (auto& filter : channel.allowed)
