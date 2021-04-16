@@ -105,7 +105,7 @@ PLUGIN_API bool OnIncomingChat(const char* Line, DWORD Color)
 	if (client && !disabled && GetGameState() == GAMESTATE_INGAME)
 	{
 		client->enqueueIfMatch(Line);
-	    return true;
+	    return false;
 	}
 	return false;
 }
