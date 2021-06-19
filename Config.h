@@ -83,7 +83,7 @@ struct DiscordConfig
 		std::regex tokenRegex("[MN][A-Za-z\\d]{23}\\.[\\w-]{6}\\.[\\w-]{27}");
 		if (!std::regex_match(token, tokenRegex))
 			results.push_back("Invalid token");
-		
+
 		return results;
 	}
 };

@@ -69,7 +69,7 @@ PLUGIN_API void OnPulse()
 			strcpy_s(command,commands.front().c_str());
 			commands.pop();
 		}
-		DoCommand((PSPAWNINFO)pCharSpawn, command);
+		EzCommand(command);
 	}
 
 	// Output any queued messages
@@ -377,6 +377,7 @@ void Reload()
 			channel.prefix = ParseMacroDataString(channel.prefix);
 		}
 
+		// FIXME:  A lot of allocations happening here.
 		// Add #*# at the start/end of any filters that don't have it already
 		for (auto& filter : channel.allowed)
 			if (filter.substr(0, 3) != "#*#" && filter.substr(filter.length() - 3, 3) != "#*#")

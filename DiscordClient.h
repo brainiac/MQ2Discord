@@ -88,17 +88,22 @@ namespace MQ2Discord
 
 			// Send to any channels that matched
 			for (auto kvp : _filterMatches)
-				if ((kvp.first->show_command_response > 0
-						&& _responseExpiryTimes.find(kvp.first) != _responseExpiryTimes.end() 
-						&& _responseExpiryTimes[kvp.first] > std::chrono::system_clock::now())
-					|| kvp.second == FilterMatch::Allow)
+			{
+				if (kvp.first)
 				{
-					enqueue(kvp.first->id, _parseMacroData(kvp.first->prefix) + escape_discord(message));
+					if ((kvp.first->show_command_response > 0
+							&& _responseExpiryTimes.find(kvp.first) != _responseExpiryTimes.end()
+							&& _responseExpiryTimes[kvp.first] > std::chrono::system_clock::now())
+						|| kvp.second == FilterMatch::Allow)
+					{
+						enqueue(kvp.first->id, _parseMacroData(kvp.first->prefix) + escape_discord(message));
+					}
+					else if (kvp.second == FilterMatch::Notify)
+					{
+						enqueue(kvp.first->id, _parseMacroData(kvp.first->prefix) + escape_discord(message) + " @everyone");
+					}
 				}
-				else if (kvp.second == FilterMatch::Notify)
-				{
-					enqueue(kvp.first->id, _parseMacroData(kvp.first->prefix) + escape_discord(message) + " @everyone");
-				}
+			}
 		}
 
 	private:
@@ -414,7 +419,10 @@ namespace MQ2Discord
 		{
 			try
 			{
-				CallbackDiscordClient client(_token, std::bind(&DiscordClient::onMessageReceived, this, std::placeholders::_1));
+				CallbackDiscordClient client(_token, [this](auto&& PH1)
+				{
+					onMessageReceived(std::forward<decltype(PH1)>(PH1));
+				});
 
 				_writeNormal("Connected");
 
