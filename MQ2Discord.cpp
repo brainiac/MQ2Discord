@@ -17,7 +17,7 @@
 //#pragma pack(pop)
 
 PreSetup("MQ2Discord");
-PLUGIN_VERSION(1.0);
+PLUGIN_VERSION(1.1);
 
 // MQ2Main isn't nice enough to export this
 unsigned int __stdcall MQ2DataVariableLookup(char * VarName, char * Value, size_t ValueLen)
@@ -33,112 +33,12 @@ void Reload();
 
 std::unique_ptr<MQ2Discord::DiscordClient> client;
 bool disabled = false;
+bool debug = false;
 std::queue<std::string> commands;
 std::mutex commandsMutex;
 std::queue<std::string> messages;
 std::mutex messagesMutex;
 DWORD mainThreadId;
-
-PLUGIN_API void InitializePlugin()
-{
-	mainThreadId = GetCurrentThreadId();
-	AddCommand("/discord", DiscordCmd, false, false, true);
-}
-
-PLUGIN_API void ShutdownPlugin()
-{
-	if (client)
-	{
-		client.reset();
-	}
-	RemoveCommand("/discord");
-}
-
-PLUGIN_API void OnPulse()
-{
-	// Execute any queued commands
-	while (true)
-	{
-		char command[MAX_STRING] = {0};
-		{
-			std::lock_guard<std::mutex> lock(commandsMutex);
-
-			if (commands.empty())
-				break;
-
-			strcpy_s(command,commands.front().c_str());
-			commands.pop();
-		}
-		EzCommand(command);
-	}
-
-	// Output any queued messages
-	while (true)
-	{
-		char message[MAX_STRING] = { 0 };
-		{
-			std::lock_guard<std::mutex> lock(messagesMutex);
-
-			if (messages.empty())
-				break;
-
-			strcpy_s(message, messages.front().c_str());
-			messages.pop();
-		}
-		disabled = true;
-		WriteChatf(message);
-		disabled = false;
-	}
-
-}
-
-PLUGIN_API void OnWriteChatColor(const char* Line, int Color, int Filter)
-{
-	if (client && !disabled && GetGameState() == GAMESTATE_INGAME)
-	{
-		client->enqueueIfMatch(Line);
-	}
-}
-
-PLUGIN_API bool OnIncomingChat(const char* Line, DWORD Color)
-{
-	if (client && !disabled && GetGameState() == GAMESTATE_INGAME)
-	{
-		client->enqueueIfMatch(Line);
-	    return false;
-	}
-	return false;
-}
-
-PLUGIN_API void SetGameState(int GameState)
-{
-	if (GameState == GAMESTATE_INGAME)
-	{
-		Reload();
-	}
-	else
-	{
-		if (client)
-		{
-			client->enqueueAll("Disconnecting, no longer in game");
-			client.reset();
-		}
-	}
-}
-
-std::string ParseMacroDataString(const std::string& input)
-{
-	char buffer[MAX_STRING] = { 0 };
-	strcpy_s(buffer, input.c_str());
-	ParseMacroData(buffer, MAX_STRING);
-	return buffer;
-}
-
-void OnCommand(std::string command)
-{
-	std::lock_guard<std::mutex> _lock(commandsMutex);
-	commands.emplace(command);
-}
 
 void OutputMessage(const char * prepend, const char * format, va_list args)
 {
@@ -157,6 +57,17 @@ void OutputMessage(const char * prepend, const char * format, va_list args)
 	{
 		std::lock_guard<std::mutex>	lock(messagesMutex);
 		messages.emplace(output);
+	}
+}
+
+void OutputDebug(const char * format, ...)
+{
+	if (debug)
+	{
+		va_list args;
+		va_start(args, format);
+		OutputMessage("\ag[MQ2Discord] \amDebug: \aw ", format, args);
+		va_end(args);
 	}
 }
 
@@ -184,6 +95,35 @@ void OutputNormal(const char * format, ...)
 	va_end(args);
 }
 
+void ProcessMessage(std::string Message)
+{
+	if (client && !disabled && GetGameState() == GAMESTATE_INGAME)
+	{
+		char myMessage[MAX_STRING] = { 0 };
+		strcpy_s(myMessage, Message.c_str());
+		// Should be okay to modify the message since it's a copy.
+		StripTextLinks(myMessage);
+		// Resize the string to match the first null terminator.
+		//Message.erase(std::find(Message.begin(), Message.end(), '\0'), Message.end());
+		client->enqueueIfMatch(myMessage);
+	}
+}
+
+std::string ParseMacroDataString(const std::string& input)
+{
+	char buffer[MAX_STRING] = { 0 };
+	strcpy_s(buffer, input.c_str());
+	ParseMacroData(buffer, MAX_STRING);
+	return buffer;
+}
+
+void OnCommand(std::string command)
+{
+	OutputDebug("OnCommand: %s", command.c_str());
+	std::lock_guard<std::mutex> _lock(commandsMutex);
+	commands.emplace(command);
+}
+
 void SetDefaults(DiscordConfig& config)
 {
 	config.token = "YourTokenHere";
@@ -194,7 +134,6 @@ void SetDefaults(DiscordConfig& config)
 	charChannel.name = "CharChannel (This field is ignored)";
 	charChannel.id = "YourCharacterChannelHere";
 	charChannel.prefix = "";
-	charChannel.allowed.emplace_back("[MQ2]#*#");
 	charChannel.allow_commands = true;
 	charChannel.show_command_response = 2000;
 	config.characters[ParseMacroDataString("${EverQuest.Server}_${Me.Name}")].push_back(charChannel);
@@ -390,10 +329,10 @@ void Reload()
 				filter = "#*#" + filter + "#*#";
 	}
 
-	client = std::make_unique<MQ2Discord::DiscordClient>(config.token, config.user_ids, channels, OnCommand, ParseMacroDataString, OutputError, OutputWarning, OutputNormal);
+	client = std::make_unique<MQ2Discord::DiscordClient>(config.token, config.user_ids, channels, OnCommand, ParseMacroDataString, OutputError, OutputWarning, OutputNormal, OutputDebug);
 }
 
-VOID DiscordCmd(PSPAWNINFO pChar, PCHAR szLine)
+void DiscordCmd(PSPAWNINFO pChar, PCHAR szLine)
 {
 	char buffer[MAX_STRING] = { 0 };
 
@@ -402,5 +341,103 @@ VOID DiscordCmd(PSPAWNINFO pChar, PCHAR szLine)
 	if (!_stricmp(buffer, "reload"))
 	{
 		Reload();
+	}
+	else if (!_stricmp(buffer, "stop"))
+	{
+		client->Stop();
+	}
+	else if (!_stricmp(buffer, "debug"))
+	{
+		debug = !debug;
+		OutputNormal("Debug is now: %s\ax", debug ? "\agON" : "\arOFF");
+	}
+	else if (!_stricmp(buffer, "process"))
+	{
+		std::string strLine = szLine;
+		strLine = strLine.substr((std::string(buffer) + " ").length());
+		OutputDebug("Processing: %s", strLine.c_str());
+		ProcessMessage(strLine);
+	}
+	else
+	{
+		OutputWarning("Invalid command.  Valid commands are process, reload, and for debugging: debug, stop.");
+	}
+}
+
+PLUGIN_API void InitializePlugin()
+{
+	mainThreadId = GetCurrentThreadId();
+	AddCommand("/discord", DiscordCmd);
+}
+
+PLUGIN_API void ShutdownPlugin()
+{
+	if (client)
+	{
+		client->Stop();
+		while(!client->IsStopped())
+		{
+			// Wait until client is stopped.
+		}
+		client.reset();
+	}
+	RemoveCommand("/discord");
+}
+
+PLUGIN_API void OnPulse()
+{
+	// Execute any queued commands
+	while (true)
+	{
+		std::lock_guard<std::mutex> lock(commandsMutex);
+
+		if (commands.empty())
+			break;
+
+		OutputDebug("OnPulse: %s", commands.front().c_str());
+		EzCommand(commands.front().c_str());
+		commands.pop();
+	}
+
+	// Output any queued messages
+	while (true)
+	{
+		std::lock_guard<std::mutex> lock(messagesMutex);
+
+		if (messages.empty())
+			break;
+
+		disabled = true;
+		WriteChatf(messages.front().c_str());
+		disabled = false;
+		messages.pop();
+	}
+
+}
+
+PLUGIN_API void OnWriteChatColor(const char* Line, int Color, int Filter)
+{
+	ProcessMessage(Line);
+}
+
+PLUGIN_API bool OnIncomingChat(const char* Line, DWORD Color)
+{
+	ProcessMessage(Line);
+	return false;
+}
+
+PLUGIN_API void SetGameState(int GameState)
+{
+	if (GameState == GAMESTATE_INGAME)
+	{
+		Reload();
+	}
+	else
+	{
+		if (client)
+		{
+			client->enqueueAll("Disconnecting, no longer in game");
+			client.reset();
+		}
 	}
 }

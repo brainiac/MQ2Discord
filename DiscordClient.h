@@ -8,7 +8,7 @@
 #include <vector>
 #include <mutex>
 #include <queue>
-#include <sleepy_discord\websocketpp_websocket.h>
+#include <sleepy_discord\sleepy_discord.h>
 #include "Config.h"
 #include "Blech/Blech.h"
 
@@ -34,9 +34,10 @@ namespace MQ2Discord
 			std::function<std::string(std::string input)> parseMacroData,
 			void(*writeError)(const char * format, ...),
 			void(*writeWarning)(const char * format, ...),
-			void(*writeNormal)(const char * format, ...))
+			void(*writeNormal)(const char * format, ...),
+			void(*writeDebug)(const char * format, ...))
 			: _token(std::move(token)), _userIds(std::move(userIds)), _channels(std::move(channels)), _parseMacroData(std::move(parseMacroData)),
-			_executeCommand(std::move(executeCommand)), _writeError(writeError), _writeWarning(writeWarning), _writeNormal(writeNormal), _stop(false),
+			_executeCommand(std::move(executeCommand)), _writeError(writeError), _writeWarning(writeWarning), _writeNormal(writeNormal), _writeDebug(writeDebug), _stop(false),
 			_blech('#', '|', MQ2DataVariableLookup)
 		{
 			// Add events to the parser and store the id/channel in the appropriate map
@@ -60,9 +61,10 @@ namespace MQ2Discord
 
 		~DiscordClient()
 		{
-			// Signal thread to stop, then wait for it to do so
-			_stop = true;
+			_writeDebug("Destructor Called");
+			Stop();
 			_thread.join();
+			_writeDebug("Thread Joined");
 		}
 
 		/// Queue a message to be sent on all channels
@@ -71,6 +73,17 @@ namespace MQ2Discord
 			std::lock_guard<std::mutex> lock(_messagesMutex);
 			for (auto channel : _channels)
 				_messages.emplace(channel.id, _parseMacroData(channel.prefix) + message);
+		}
+
+		void Stop()
+		{
+			_writeDebug("Stopping discord thread");
+			_stop = true;
+		}
+
+		bool IsStopped()
+		{
+			return _stopped;
 		}
 
 		/// Queue a message to be sent on any channel with matching filters
@@ -131,11 +144,17 @@ namespace MQ2Discord
 		/// Function to write an regular message to ingame chat. Must be threadsafe
 		void(*const _writeNormal)(const char * format, ...);
 
+		/// Function to write an debug message to ingame chat. Must be threadsafe
+		void(*const _writeDebug)(const char * format, ...);
+
 		/// Background thread to handle discord communications. Will run for the lifetime of this class
 		std::thread _thread;
 
 		/// Stop signal	for the background thread
 		std::atomic<bool> _stop;
+
+		/// Determine if the thread is actually stopped.
+		std::atomic<bool> _stopped;
 
 		/// Queue of messages to send to discord. Tuple of channelId, messageText
 		std::queue<std::tuple<std::string, std::string>> _messages;
@@ -200,7 +219,7 @@ namespace MQ2Discord
 		public:
 			using SleepyDiscord::DiscordClient::DiscordClient;
 			CallbackDiscordClient(const std::string& token, std::function<void(SleepyDiscord::Message &)> callback)
-				: SleepyDiscord::DiscordClient(token, 0),
+				: SleepyDiscord::DiscordClient(token, SleepyDiscord::USER_CONTROLED_THREADS),
 				_callback(std::move(callback))
 			{
 			}
@@ -216,6 +235,7 @@ namespace MQ2Discord
 
 		void onMessageReceived(SleepyDiscord::Message& message)
 		{
+			//_writeDebug("Message received: %s", message.content.c_str());
 			// Did it come from a channel we recognize?
 			auto channel = std::find_if(_channels.begin(), _channels.end(), [&](auto channel) { return message.channelID == channel.id; });
 			if (channel == _channels.end())
@@ -419,73 +439,89 @@ namespace MQ2Discord
 		{
 			try
 			{
-				CallbackDiscordClient client(_token, [this](auto&& PH1)
-				{
-					onMessageReceived(std::forward<decltype(PH1)>(PH1));
+				CallbackDiscordClient client(_token, [this](auto&& PH1) { onMessageReceived(std::forward<decltype(PH1)>(PH1)); });
+				client.setIntents(SleepyDiscord::Intent::SERVER_MESSAGES);
+
+				auto clientAsync = std::async(std::launch::async, [&]() {
+					client.run();
 				});
 
-				_writeNormal("Connected");
-
-				int count = 0;
-				while (!_stop)
+				// Give the client time to connect
+				//std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+				//if (client.isReady())
 				{
-					// Every minute, send typing, to keep connection alive. Crude timer based on 1s sleep below
-					try
-					{
-						if (++count % 60 == 0 && !client.isRateLimited())
-							for (const auto& channel : _channels)
-								client.sendTyping(channel.id);
-					}
-					// This is not so critical that it should shut things down if it doesn't work
-					catch (...)	{ }
+					_writeNormal("Connected");
 
-					// grab all queued messages, put them into a map of channel -> combined message
-					std::map<std::string, std::string> combinedMessages;
-					while (true)
+					int count = 0;
+					while (!_stop)
 					{
-						std::tuple<std::string, std::string> message;
+						_stopped = false;
+						// Every minute, send typing, to keep connection alive. Crude timer based on 1s sleep below
+						try
 						{
-							std::lock_guard<std::mutex> lock(_messagesMutex);
-							if (_messages.empty())
-								break;
-							message = _messages.front();
-							_messages.pop();
+							if (++count % 60 == 0 && !client.isRateLimited())
+							{
+								client.updateStatus();
+								for (const auto& channel : _channels)
+									client.sendTyping(channel.id);
+							}
 						}
-						//combinedMessages[std::get<0>(message)] += escape_json(std::get<1>(message) + "\n");
-						combinedMessages[std::get<0>(message)] += std::get<1>(message) + '\n';
+						// This is not so critical that it should shut things down if it doesn't work
+						catch (...)	{ }
 
-						// If the message is too long, send what we currently have and grab the rest the next go through
-						if (combinedMessages[std::get<0>(message)].length() > 1800)
-							break;
-					}
-
-					for (const auto& kvp : combinedMessages)
-					{
+						// grab all queued messages, put them into a map of channel -> combined message
+						std::map<std::string, std::string> combinedMessages;
 						while (true)
 						{
-							try
+							std::tuple<std::string, std::string> message;
 							{
-								client.sendMessage(kvp.first, kvp.second);
-								break;
-							}
-							catch (SleepyDiscord::ErrorCode& e)
-							{
-								// If we're rate limited, back off a bit and try again shortly. Otherwise, bail out
-								if (e == SleepyDiscord::TOO_MANY_REQUESTS || e == SleepyDiscord::RATE_LIMITED)
-									std::this_thread::sleep_for(std::chrono::milliseconds(200));
-								else
-								{
-									_writeError("\ar%s\aw - %s", errorString(e).c_str(), errorDesc(e).c_str());
+								std::lock_guard<std::mutex> lock(_messagesMutex);
+								if (_messages.empty())
 									break;
+								message = _messages.front();
+								_messages.pop();
+							}
+							//combinedMessages[std::get<0>(message)] += escape_json(std::get<1>(message) + "\n");
+							combinedMessages[std::get<0>(message)] += std::get<1>(message) + '\n';
+
+							// If the message is too long, send what we currently have and grab the rest the next go through
+							if (combinedMessages[std::get<0>(message)].length() > 1800)
+								break;
+						}
+
+						for (const auto& kvp : combinedMessages)
+						{
+							while (true)
+							{
+								try
+								{
+									client.sendMessage(kvp.first, kvp.second);
+									break;
+								}
+								catch (SleepyDiscord::ErrorCode& e)
+								{
+									// If we're rate limited, back off a bit and try again shortly. Otherwise, bail out
+									if (e == SleepyDiscord::TOO_MANY_REQUESTS || e == SleepyDiscord::RATE_LIMITED)
+										std::this_thread::sleep_for(std::chrono::milliseconds(200));
+									else
+									{
+										_writeError("\ar%s\aw - %s", errorString(e).c_str(), errorDesc(e).c_str());
+										break;
+									}
 								}
 							}
 						}
-					}
 
-					client.poll();
-					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+						std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+					}
+					_writeNormal("Disconnecting...");
 				}
-				_writeNormal("Disconnecting...");
+				/*else
+				{
+					_writeError("Could not connect to Discord.");
+				}*/
+				client.quit();
+				_stopped = true;
 			}
 			catch (std::exception& e)
 			{

@@ -1,2 +1,4 @@
-sleepy-discord[websocketpp]
+asio
+openssl
+sleepy-discord
 yaml-cpp

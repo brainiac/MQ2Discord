@@ -80,7 +80,7 @@ struct DiscordConfig
 				if (!std::regex_match(channel.id, idRegex))
 					results.push_back("Channel id \ay" + channel.id + "\aw in group \ay" + group.name + "\aw looks wrong");
 
-		std::regex tokenRegex("[MN][A-Za-z\\d]{23}\\.[\\w-]{6}\\.[\\w-]{27}");
+		std::regex tokenRegex("[M-Z][A-Za-z\\d]{23}\\.[\\w\\-_]{6}\\.[\\w\\-_]{27}");
 		if (!std::regex_match(token, tokenRegex))
 			results.push_back("Invalid token");
 
