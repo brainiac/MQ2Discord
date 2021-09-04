@@ -50,12 +50,12 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Link>
-      <AdditionalDependencies>libyaml-cppmdd.lib;sleepy-discord.lib;zlibd.lib;cpr.lib;libcurl-d.lib;libcrypto.lib;libssl.lib;crypt32.lib;winmm.lib;wldap32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>yaml-cppd.lib;sleepy-discord.lib;zlibd.lib;cpr.lib;libcurl-d.lib;libcrypto.lib;libssl.lib;crypt32.lib;winmm.lib;wldap32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Link>
-      <AdditionalDependencies>libyaml-cppmd.lib;sleepy-discord.lib;zlib.lib;cpr.lib;libcurl.lib;libcrypto.lib;libssl.lib;crypt32.lib;winmm.lib;wldap32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>yaml-cpp.lib;sleepy-discord.lib;zlib.lib;cpr.lib;libcurl.lib;libcrypto.lib;libssl.lib;crypt32.lib;winmm.lib;wldap32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
