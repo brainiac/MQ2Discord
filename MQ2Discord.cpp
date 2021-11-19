@@ -353,8 +353,15 @@ void DiscordCmd(PSPAWNINFO pChar, PCHAR szLine)
 	{
 		std::string strLine = szLine;
 		strLine = strLine.substr((std::string(buffer) + " ").length());
-		OutputDebug("Processing: %s", strLine.c_str());
-		ProcessMessage(strLine);
+		if (!strLine.empty())
+		{
+			OutputDebug("Processing: %s", strLine.c_str());
+			ProcessMessage(strLine);
+		}
+		else
+		{
+			OutputError("Process is used to process a specific line, you must enter something after the word 'process' ex: /discord process This is a test");
+		}
 	}
 	else
 	{
