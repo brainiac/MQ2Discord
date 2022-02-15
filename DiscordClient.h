@@ -8,7 +8,12 @@
 #include <vector>
 #include <mutex>
 #include <queue>
+
+#pragma warning(push)
+#pragma warning(disable: 4267)
 #include <sleepy_discord\sleepy_discord.h>
+#pragma warning(pop)
+
 #include "Config.h"
 #include "Blech/Blech.h"
 

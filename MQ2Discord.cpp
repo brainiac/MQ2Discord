@@ -7,12 +7,7 @@
 #include <yaml-cpp\yaml.h>
 #include <filesystem>
 
-// Sleepy discord library is compiled with default struct align, MQ2 needs 4 byte
-// Even with this pragma push/pop, having headers for both included in the same cpp causes stack corruption :(
-// So this file contains MQ2 stuff, other file contains discord stuff
-//#pragma pack(push, 4)
 #include <mq/Plugin.h>
-//#pragma pack(pop)
 
 PreSetup("MQ2Discord");
 PLUGIN_VERSION(1.1);
@@ -22,8 +17,8 @@ unsigned int __stdcall MQ2DataVariableLookup(char * VarName, char * Value, size_
 {
 	strcpy_s(Value, ValueLen, VarName);
 	if (!pLocalPlayer)
-		return strlen(Value);
-	return strlen(ParseMacroParameter((PSPAWNINFO)pLocalPlayer, Value, ValueLen));
+		return (uint32_t)strlen(Value);
+	return (uint32_t)strlen(ParseMacroParameter((PSPAWNINFO)pLocalPlayer, Value, ValueLen));
 }
 
 VOID DiscordCmd(PSPAWNINFO pChar, PCHAR szLine);
