@@ -193,7 +193,7 @@ DiscordConfig GetConfig()
 		for (const auto & kvp : jsonConfigs)
 		{
 			// Skip if there's no channel id
-			if (kvp.second["channel"].as<std::string>() == "")
+			if (kvp.second["channel"].as<std::string>().empty())
 				continue;
 
 			imported = true;
@@ -347,9 +347,10 @@ void DiscordCmd(PSPAWNINFO pChar, PCHAR szLine)
 	else if (!_stricmp(buffer, "process"))
 	{
 		std::string strLine = szLine;
-		strLine = strLine.substr((std::string(buffer) + " ").length());
-		if (!strLine.empty())
+		const std::string strBuffer = buffer;
+		if (strLine.length() > strBuffer.length())
 		{
+			strLine = strLine.substr((strBuffer).length() + 1);
 			OutputDebug("Processing: %s", strLine.c_str());
 			ProcessMessage(strLine);
 		}

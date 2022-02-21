@@ -1,0 +1,42 @@
+# Token is your Bot's Oauth Token, read the docs to see how to get it.  Don't share it with anyone.
+token: OoughtNotShareYourTokenWithAnyone.ReadTheDocs
+# This is your user ID and any other user IDs you want to allow to send commands
+user_ids:
+  - 86753098675309
+characters:
+  # Which character to activate this on
+  rizlona_Notgonnaknightly:
+    # This identifier is just a section, it doesn't actually matter.  Call it what you like.
+    - name: rizlona_Notknightly
+      # Which channel you want your messages to go into
+      id: 90357689035768
+      # Messages matching this will be sent
+      allowed:
+        - "#*#tells you,#*#"
+      # Messages that match another filter, but also match this one won't be sent
+      blocked:
+        - "#*#s familiar tells you,#*#"
+        - "#*#corpse tells you,#*#"
+      # Messages that match this will @ everyone in the channel
+      notify:
+        - "[AlertMaster]#*#"
+      # What do you want to prefix messages to this channel with
+      prefix: ""
+      # Send when you connect to the channel?
+      send_connected: false
+      # Allow commands from this channel?
+      allow_commands: true
+      # How long after you send a response do you want commands echoed back to you?
+      show_command_response: 1000
+  # Can have as many characters as you'd like
+  rizlona_Alsonotknightly:
+    - name: rizlona_Alsonotknightly
+      id: 0000086753098675309
+      allowed:
+      blocked:
+      notify:
+        - "#*#Returning to Bind Location#*#"
+      prefix: ""
+      send_connected: false
+      allow_commands: true
+      show_command_response: 1000

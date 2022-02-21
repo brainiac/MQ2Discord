@@ -500,7 +500,12 @@ namespace MQ2Discord
 							{
 								try
 								{
-									client.sendMessage(kvp.first, kvp.second);
+									const std::string messageResponse = client.sendMessage(kvp.first, kvp.second).text;
+									_writeDebug(messageResponse.c_str());
+									if (messageResponse.empty())
+									{
+										_writeError("Failed to send discord message to: %s", kvp.first.c_str());
+									}
 									break;
 								}
 								catch (SleepyDiscord::ErrorCode& e)
