@@ -278,8 +278,8 @@ void Reload()
 		channels.insert(channels.end(), config.characters[server_character].begin(), config.characters[server_character].end());
 
 	// Server channels
-	if (config.servers.find(EQADDR_SERVERNAME) != config.servers.end())
-		channels.insert(channels.end(), config.servers[EQADDR_SERVERNAME].begin(), config.servers[EQADDR_SERVERNAME].end());
+	if (config.servers.find(GetServerShortName()) != config.servers.end())
+		channels.insert(channels.end(), config.servers[GetServerShortName()].begin(), config.servers[GetServerShortName()].end());
 
 	// Class channels
 	if (config.classes.find(classShortName) != config.classes.end())
