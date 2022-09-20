@@ -455,7 +455,7 @@ namespace MQ2Discord
 				//std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 				//if (client.isReady())
 				{
-					_writeNormal("Connected");
+					_writeNormal("Ready");
 
 					int count = 0;
 					while (!_stop)
