@@ -1,5 +1,3 @@
-#define NONEXISTENT_OPUS
-
 #include "DiscordClient.h"
 #include "Config.h"
 #include <fstream>

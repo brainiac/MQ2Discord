@@ -93,6 +93,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="DiscordClient.cpp" />
     <ClCompile Include="MQ2Discord.cpp" />
   </ItemGroup>
   <ItemGroup>
