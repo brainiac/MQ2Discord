@@ -240,7 +240,7 @@ namespace MQ2Discord
 
 		void onMessageReceived(SleepyDiscord::Message& message)
 		{
-			//_writeDebug("Message received: %s", message.content.c_str());
+			_writeDebug("Message received: %s", message.content.c_str());
 			// Did it come from a channel we recognize?
 			auto channel = std::find_if(_channels.begin(), _channels.end(), [&](auto channel) { return message.channelID == channel.id; });
 			if (channel == _channels.end())
