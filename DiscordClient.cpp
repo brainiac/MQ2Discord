@@ -1,459 +1,523 @@
 
 #include "DiscordClient.h"
+#include "Blech/Blech.h"
 
-namespace MQ2Discord {
+#include <mq/Plugin.h>
+#include <spdlog/spdlog.h>
 
-//============================================================================
+#include <string_view>
+#include <sstream>
 
-// Real simple client, all it does is invoke a callback when a message is received
-class CallbackDiscordClient : public SleepyDiscord::DiscordClient
+uint32_t __stdcall MQ2DataVariableLookup(char* VarName, char* Value, size_t ValueLen);
+
+// Callback function for blech parser match
+static void __stdcall BlechMatch(unsigned int ID, void* pData, PBLECHVALUE pValues);
+
+using CommandCallback = void (DiscordClient::*)(const std::string&, const dpp::parameter_list_t&, const dpp::command_source&);
+
+template <typename OutIter>
+void StripMQChat(std::string_view in, OutIter out)
 {
-public:
-	using SleepyDiscord::DiscordClient::DiscordClient;
-	CallbackDiscordClient(const std::string& token, std::function<void(SleepyDiscord::Message&)> callback)
-		: SleepyDiscord::DiscordClient(token, SleepyDiscord::USER_CONTROLED_THREADS),
-		_callback(std::move(callback))
+	size_t i = 0;
+
+	while (i < in.size() && in[i])
 	{
-	}
-
-	void onMessage(SleepyDiscord::Message message) override
-	{
-		if (_callback)
-			_callback(message);
-	}
-private:
-	std::function<void(SleepyDiscord::Message&)> _callback;
-};
-
-static std::string errorString(SleepyDiscord::ErrorCode errorCode)
-{
-	switch (errorCode)
-	{
-	case SleepyDiscord::ERROR_ZERO: return "ERROR_ZERO";
-	case SleepyDiscord::SWITCHING_PROTOCOLS: return "SWITCHING_PROTOCOLS";
-	case SleepyDiscord::OK: return "OK";
-	case SleepyDiscord::CREATED: return "CREATED";
-	case SleepyDiscord::NO_CONTENT: return "NO_CONTENT";
-	case SleepyDiscord::NOT_MODIFIED: return "NOT_MODIFIED";
-	case SleepyDiscord::BAD_REQUEST: return "BAD_REQUEST";
-	case SleepyDiscord::UNAUTHORIZED: return "UNAUTHORIZED";
-	case SleepyDiscord::FORBIDDEN: return "FORBIDDEN";
-	case SleepyDiscord::NOT_FOUND: return "NOT_FOUND";
-	case SleepyDiscord::METHOD_NOT_ALLOWED: return "METHOD_NOT_ALLOWED";
-	case SleepyDiscord::TOO_MANY_REQUESTS: return "TOO_MANY_REQUESTS";
-	case SleepyDiscord::GATEWAY_UNAVAILABLE: return "GATEWAY_UNAVAILABLE";
-	case SleepyDiscord::UNKNOWN_ERROR: return "UNKNOWN_ERROR";
-	case SleepyDiscord::UNKNOWN_OPCODE: return "UNKNOWN_OPCODE";
-	case SleepyDiscord::DECODE_ERROR: return "DECODE_ERROR";
-	case SleepyDiscord::NOT_AUTHENTICATED: return "NOT_AUTHENTICATED";
-	case SleepyDiscord::AUTHENTICATION_FAILED: return "AUTHENTICATION_FAILED";
-	case SleepyDiscord::ALREADY_AUTHENTICATED: return "ALREADY_AUTHENTICATED";
-	case SleepyDiscord::SESSION_NO_LONGER_VALID: return "SESSION_NO_LONGER_VALID";
-	case SleepyDiscord::INVALID_SEQ: return "INVALID_SEQ";
-	case SleepyDiscord::RATE_LIMITED: return "RATE_LIMITED";
-	case SleepyDiscord::SESSION_TIMEOUT: return "SESSION_TIMEOUT";
-	case SleepyDiscord::INVALID_SHARD: return "INVALID_SHARD";
-	case SleepyDiscord::SHARDING_REQUIRED: return "SHARDING_REQUIRED";
-	case SleepyDiscord::UNKNOWN_PROTOCOL: return "UNKNOWN_PROTOCOL";
-	case SleepyDiscord::INVALID_INTENTS: return "INVALID_INTENTS";
-	case SleepyDiscord::DISALLOWED_INTENTS: return "DISALLOWED_INTENTS";
-	case SleepyDiscord::VOICE_SERVER_CRASHED: return "VOICE_SERVER_CRASHED";
-	case SleepyDiscord::UNKNOWN_ENCRYPTION_MODE: return "UNKNOWN_ENCRYPTION_MODE";
-	case SleepyDiscord::CONNECT_FAILED: return "CONNECT_FAILED";
-	case SleepyDiscord::EVENT_UNKNOWN: return "EVENT_UNKNOWN";
-	case SleepyDiscord::GATEWAY_FAILED: return "GATEWAY_FAILED";
-	case SleepyDiscord::GENERAL_ERROR: return "GENERAL_ERROR";
-	case SleepyDiscord::LAZY_ERROR: return "LAZY_ERROR";
-	case SleepyDiscord::ERROR_NOTE: return "ERROR_NOTE";
-	default: return "UNKNOWN";
-	}
-}
-
-static std::string errorDesc(SleepyDiscord::ErrorCode errorCode)
-{
-	switch (errorCode)
-	{
-	case SleepyDiscord::ERROR_ZERO: return "Zero error?!";
-	case SleepyDiscord::SWITCHING_PROTOCOLS: return "The server has acknowledged a request to switch protocols";
-	case SleepyDiscord::OK: return "The request completed successfully";
-	case SleepyDiscord::CREATED: return "The entity was created successfully";
-	case SleepyDiscord::NO_CONTENT: return "The request completed successfully but returned no content";
-	case SleepyDiscord::NOT_MODIFIED: return "The entity was not modified(no action was taken)";
-	case SleepyDiscord::BAD_REQUEST: return "The request was improperly formatted, or the server couldn't understand it";
-	case SleepyDiscord::UNAUTHORIZED: return "The Authorization header was missing or invalid";
-	case SleepyDiscord::FORBIDDEN: return "The Authorization token you passed did not have permission to the resource";
-	case SleepyDiscord::NOT_FOUND: return "The resource at the location specified doesn't exist";
-	case SleepyDiscord::METHOD_NOT_ALLOWED: return "The HTTP method used is not valid for the location specified";
-	case SleepyDiscord::TOO_MANY_REQUESTS: return "You've made too many requests, see Rate Limiting";
-	case SleepyDiscord::GATEWAY_UNAVAILABLE: return "There was not a gateway available to process your request.Wait a bit and retry";
-	case SleepyDiscord::UNKNOWN_ERROR: return "We're not sure what went wrong. Try reconnecting?";
-	case SleepyDiscord::UNKNOWN_OPCODE: return "You sent an invalid Gateway OP Code.Don't do that!";
-	case SleepyDiscord::DECODE_ERROR: return "You sent an invalid payload to us.Don't do that!";
-	case SleepyDiscord::NOT_AUTHENTICATED: return "You sent us a payload prior to identifying.";
-	case SleepyDiscord::AUTHENTICATION_FAILED: return "The account token sent with your identify payload is incorrect.";
-	case SleepyDiscord::ALREADY_AUTHENTICATED: return "You sent more than one identify payload.Don't do that!";
-	case SleepyDiscord::SESSION_NO_LONGER_VALID: return "Your session is no longer valid.";
-	case SleepyDiscord::INVALID_SEQ: return "The sequence sent when resuming the session was invalid.Reconnect and start a new session.";
-	case SleepyDiscord::RATE_LIMITED: return "Woah nelly!You're sending payloads to us too quickly. Slow it down!";
-	case SleepyDiscord::SESSION_TIMEOUT: return "Your session timed out.Reconnect and start a new one.";
-	case SleepyDiscord::INVALID_SHARD: return "You sent us an invalid shard when identifying.";
-	case SleepyDiscord::SHARDING_REQUIRED: return "The session would have handled too many guilds - you are required to shard your connection in order to connect.";
-	case SleepyDiscord::UNKNOWN_PROTOCOL: return "We didn't recognize the protocol you sent.";
-	case SleepyDiscord::INVALID_INTENTS: return "Oh no! You sent an invalid intent for a gateway (Whatever that means).";
-	case SleepyDiscord::DISALLOWED_INTENTS: return "Oh no! You sent a disallowed intent for a gateway (Whatever that means).";
-	case SleepyDiscord::VOICE_SERVER_CRASHED: return "The server crashed. Our bad! Try resuming.";
-	case SleepyDiscord::UNKNOWN_ENCRYPTION_MODE: return "We didn't recognize your encryption.";
-	case SleepyDiscord::CONNECT_FAILED: return "Failed to connect to the Discord api after 4 trys";
-	case SleepyDiscord::EVENT_UNKNOWN: return "Unexpected or unknown event occurred";
-	case SleepyDiscord::GATEWAY_FAILED: return "Could not get the gateway";
-	case SleepyDiscord::GENERAL_ERROR: return "Used when you are too lazy to use a error code";
-	case SleepyDiscord::LAZY_ERROR: return "Used when you are too lazy to use a error code and message";
-	case SleepyDiscord::ERROR_NOTE: return "Comes after an error to give more detail about an error in the message";
-	default: return "Unrecognized error";
-	}
-}
-
-static std::string escape_json(const std::string& s)
-{
-	std::ostringstream o;
-	for (auto c = s.cbegin(); c != s.cend(); c++) {
-		if (*c == '"' || *c == '\\' || ('\x00' <= *c && *c <= '\x1f')) {
-			o << "\\u"
-				<< std::hex << std::setw(4) << std::setfill('0') << (int)*c;
-		}
-		else {
-			o << *c;
-		}
-	}
-	return o.str();
-}
-
-static std::string unescape_json(const std::string& s)
-{
-	std::ostringstream o;
-	for (auto c = s.cbegin(); c != s.cend(); ++c) {
-		if (*c == '\\')
+		if (in[i] == '\a')
 		{
-			++c;
-			switch (*c)
+			i++;
+			if (in[i] == '-')
 			{
-			case 't': { o << "\t"; break; }
-			case 'b': { o << "\b"; break; }
-			case 'f': { o << "\f"; break; }
-			case 'n': { o << "\n"; break; }
-			case 'r': { o << "\r"; break; }
-			case '\\': { o << "\\"; break; }
-			case '/': { o << "/";  break; }
-			case '"': { o << "\""; break; }
-			default:
-				;
+				i++;
+			}
+			else if (in[i] == '#')
+			{
+				i += 6;
 			}
 		}
-		else {
-			o << *c;
+		else if (in[i] == '\n')
+		{
 		}
+		else
+		{
+			*out++ = in[i];
+		}
+
+		i++;
 	}
-	return o.str();
 }
 
 // Escapes special discord characters
-static std::string escape_discord(const std::string& s)
+static std::string escape_markdown(const std::string& s)
 {
-	std::ostringstream o;
-	for (auto c : s)
+	fmt::memory_buffer buf;
+	fmt::appender itr(buf);
+
+	for (char c : s)
 	{
-		if (c == '`' || c == '*' || c == '_' || c == '~')
-			o << "\\";
-		o << c;
+		if (c == '`' || c == '*' || c == '_' || c == '~' || c == '\\')
+			*itr++ = '\\';
+
+		*itr++ = c;
 	}
-	// Clean up colour codes. First try to put anything between a colour code and a cancel in backticks e.g. \awStuff\ax -> `Stuff`
-	auto result = std::regex_replace(o.str(), std::regex("\a([^\\-x]|\\-[^x])([^\a]+)\ax"), "`$2`");
-	// Then remove any codes left over
-	result = std::regex_replace(result, std::regex("\a."), "");
-	// Then make sure there's no consecutive backticks as it makes things look funny
-	result = std::regex_replace(result, std::regex("``"), "` `");
-	return result;
+
+	fmt::memory_buffer stripped;
+	fmt::appender itr2(stripped);
+
+	StripMQChat(std::string_view{ buf.data(), buf.size() }, itr2);
+
+	return fmt::to_string(stripped);
+}
+
+std::string ParseMacroDataSync(std::string_view input)
+{
+	if (input.empty())
+		return std::string();
+
+	std::unique_lock lock(globalDataMutex);
+
+	char buffer[MAX_STRING] = { 0 };
+	strncpy_s(buffer, input.data(), input.size());
+
+	ParseMacroData(buffer, MAX_STRING);
+	return buffer;
 }
 
 //----------------------------------------------------------------------------
 
-DiscordClient::DiscordClient(std::string token,
-	std::vector<std::string> userIds,
-	std::vector<ChannelConfig> channels,
-	std::function<void(std::string command)> executeCommand,
-	std::function<std::string(std::string input)> parseMacroData,
-	void(*writeError)(const char* format, ...),
-	void(*writeWarning)(const char* format, ...),
-	void(*writeNormal)(const char* format, ...),
-	void(*writeDebug)(const char* format, ...))
-	: _token(std::move(token)), _userIds(std::move(userIds)), _channels(std::move(channels)), _parseMacroData(std::move(parseMacroData)),
-	_executeCommand(std::move(executeCommand)), _writeError(writeError), _writeWarning(writeWarning), _writeNormal(writeNormal), _writeDebug(writeDebug), _stop(false),
-	_blech('#', '|', MQ2DataVariableLookup)
+DiscordClient::DiscordClient(DiscordConfig config, std::vector<ChannelConfig>&& channels)
+	: m_config(std::move(config))
+	, m_bot(m_config.token, dpp::i_default_intents | dpp::i_message_content,
+		0 /* shards */, 0 /* cluser_id */, 1 /* maxclusters */, true /* compressed */,
+		{ dpp::cp_aggressive, dpp::cp_aggressive, dpp::cp_aggressive } /* policy */,
+		1 /* request_threads */, 1 /* request_threads_raw */)
 {
-	// Add events to the parser and store the id/channel in the appropriate map
-	for (auto channelIt = _channels.begin(); channelIt != _channels.end(); ++channelIt)
+	for (ChannelConfig& config : channels)
 	{
-		for (auto allow : channelIt->allowed)
-			_blechAllowEvents[_blech.AddEvent(allow.c_str(), blechMatch, this)] = &(*channelIt);
-		for (auto block : channelIt->blocked)
-			_blechBlockEvents[_blech.AddEvent(block.c_str(), blechMatch, this)] = &(*channelIt);
-		for (auto notify : channelIt->notify)
-			_blechNotifyEvents[_blech.AddEvent(notify.c_str(), blechMatch, this)] = &(*channelIt);
+		m_channels.emplace(dpp::snowflake(config.id), std::move(config));
 	}
 
-	// Create background thread, this starts it too
-	_thread = std::thread{ &DiscordClient::threadStart, this };
+	m_userIds.reserve(config.user_ids.size());
+	for (const std::string& userId : config.user_ids)
+	{
+		m_userIds.push_back(dpp::snowflake(userId));
+	}
 
-	for (const auto& channel : _channels)
-		if (channel.send_connected)
-			enqueue(channel.id, "Connected");
+	m_blech = std::make_unique<Blech>('#', '|', MQ2DataVariableLookup);
+
+	// Add events to the parser and store the id/channel in the appropriate map
+	for (const auto& [id, config] : m_channels)
+	{
+		for (const std::string& allow : config.allowed)
+			m_blechAllowEvents[m_blech->AddEvent(allow.c_str(), BlechMatch, this)] = id;
+		for (const std::string& block : config.blocked)
+			m_blechBlockEvents[m_blech->AddEvent(block.c_str(), BlechMatch, this)] = id;
+		for (const std::string& notify : config.notify)
+			m_blechNotifyEvents[m_blech->AddEvent(notify.c_str(), BlechMatch, this)] = id;
+	}
+
+	m_bot.on_log([this](const dpp::log_t& event) {
+		switch (event.severity) {
+		case dpp::ll_trace:
+			SPDLOG_TRACE("{}", event.message);
+			break;
+		case dpp::ll_debug:
+			SPDLOG_DEBUG("{}", event.message);
+			break;
+		case dpp::ll_info:
+			SPDLOG_INFO("{}", event.message);
+			break;
+		case dpp::ll_warning:
+			SPDLOG_WARN("{}", event.message);
+			break;
+		case dpp::ll_error:
+			SPDLOG_ERROR("{}", event.message);
+			break;
+		case dpp::ll_critical:
+		default:
+			SPDLOG_CRITICAL("{}", event.message);
+			break;
+		}
+	});
+
+	m_bot.on_ready([this](const dpp::ready_t& event) { on_ready(event); });
+	m_bot.on_message_create([this](const dpp::message_create_t& event) { on_message_create(event); });
+	m_bot.on_interaction_create([this](const dpp::interaction_create_t& event) { on_interaction_create(event); });
+
+	m_startupThread = std::thread([this]() { m_bot.start(true); });
 }
 
 DiscordClient::~DiscordClient()
 {
-	_writeDebug("Destructor Called");
-	Stop();
-	_thread.join();
-	_writeDebug("Thread Joined");
+	if (m_startupThread.joinable())
+	m_startupThread.join();
 }
 
-void DiscordClient::Stop()
+void DiscordClient::PushCallback(QueuedEvent&& cb)
 {
-	_writeDebug("Stopping discord thread");
-	_stop = true;
+	std::unique_lock lock(m_mutex);
+	m_queuedCallbacks.push_back(std::move(cb));
 }
 
-void DiscordClient::enqueueIfMatch(std::string message)
+void DiscordClient::ProcessEvents()
 {
-	// Clear results & set every channel to no match initially
-	_filterMatches.clear();
-	for (const auto& _channel : _channels)
-		_filterMatches[&_channel] = FilterMatch::None;
+	std::unique_lock lock(m_mutex);
 
-	// Feed the message through the parser. Colour codes are removed beforehand.
-	char buffer[2048] = { 0 };
-	strcpy_s(buffer, std::regex_replace(message, std::regex("\a\\-?."), "").c_str());
-	_blech.Feed(buffer);
-
-	// Send to any channels that matched
-	for (auto kvp : _filterMatches)
+	if (!m_queuedCallbacks.empty())
 	{
-		if (kvp.first)
+		std::vector<QueuedEvent> tempEvents;
+		std::swap(tempEvents, m_queuedCallbacks);
+
+		lock.unlock();
+
+		for (const auto& callback : tempEvents)
 		{
-			if ((kvp.first->show_command_response > 0
-				&& _responseExpiryTimes.find(kvp.first) != _responseExpiryTimes.end()
-				&& _responseExpiryTimes[kvp.first] > std::chrono::system_clock::now())
-				|| kvp.second == FilterMatch::Allow)
-			{
-				enqueue(kvp.first->id, _parseMacroData(kvp.first->prefix) + escape_discord(message));
-			}
-			else if (kvp.second == FilterMatch::Notify)
-			{
-				enqueue(kvp.first->id, _parseMacroData(kvp.first->prefix) + escape_discord(message) + " @everyone");
-			}
+			callback();
+		}
+
+		lock.lock();
+	}
+
+	if (!m_queuedMessages.empty())
+	{
+		// grab all queued messages, put them into a map of channel -> combined message
+		std::map<dpp::snowflake, fmt::memory_buffer> combinedMessages;
+
+		while (!m_queuedMessages.empty())
+		{
+			const auto& [channelId, message] = m_queuedMessages.front();
+			auto& buffer = combinedMessages[channelId];
+
+			if (buffer.size() > 1800)
+				continue;
+
+			fmt::format_to(fmt::appender(buffer), "{}\n", message);
+			m_queuedMessages.pop();
+		}
+
+		for (const auto& [channelId, messageBuffer] : combinedMessages)
+		{
+			std::string formattedMessage = fmt::to_string(messageBuffer);
+
+			SPDLOG_DEBUG("Sending message to channel {}: {}", channelId, formattedMessage);
+			m_bot.message_create(dpp::message(channelId, formattedMessage));
 		}
 	}
 }
 
-void DiscordClient::enqueueAll(std::string message)
+void DiscordClient::AddCommandPermissions(dpp::slashcommand& command)
 {
-	std::lock_guard<std::mutex> lock(_messagesMutex);
-	for (auto channel : _channels)
-		_messages.emplace(channel.id, _parseMacroData(channel.prefix) + message);
+	command.disable_default_permissions();
+
+	for (dpp::snowflake id : m_userIds)
+		command.add_permission(dpp::command_permission(id, dpp::cpt_user, true));
+
+	for (dpp::snowflake id : m_roleIds)
+		command.add_permission(dpp::command_permission(id, dpp::cpt_role, true));
 }
 
-
-void DiscordClient::enqueue(const std::string& channelId, const std::string& message)
+void DiscordClient::on_ready(const dpp::ready_t& event)
 {
-	std::lock_guard<std::mutex> lock(_messagesMutex);
-	_messages.emplace(channelId, message);
-}
+	m_ready.store(true);
+	SPDLOG_DEBUG("Bot is ready");
 
-// Callback function for blech parser match
-void __stdcall DiscordClient::blechMatch(unsigned int ID, void* pData, PBLECHVALUE pValues)
-{
-	auto pClient = reinterpret_cast<DiscordClient*>(pData);
-
-	// If it matched a block filter, mark it as blocked regardless of what it was before
-	auto blockEvent = pClient->_blechBlockEvents.find(ID);
-	if (blockEvent != pClient->_blechBlockEvents.end())
+	std::vector<dpp::snowflake> channels;
+	for (const auto& [id, channel] : m_channels)
 	{
-		pClient->_filterMatches[blockEvent->second] = FilterMatch::Block;
+		if (channel.send_connected)
+		{
+			if (std::find(std::begin(channels), std::end(channels), id) == std::end(channels))
+			{
+				channels.push_back(id);
+				m_bot.message_create(dpp::message(id, "Connected"));
+			}
+		}
+	}
+
+	// /status
+	dpp::slashcommand status;
+	status.set_name("status")
+		.set_description("Get current discord plugin status")
+		.set_application_id(m_bot.me.id);
+	AddCommandPermissions(status);
+	m_bot.global_command_create(status);
+
+	// /echo
+	dpp::slashcommand echo;
+	echo.set_name("echo")
+		.set_description("Echo a string from the game client")
+		.set_application_id(m_bot.me.id)
+		.add_option(
+			dpp::command_option(dpp::co_string, "text", "The text string to echo from the command", true)
+		);
+	AddCommandPermissions(echo);
+	m_bot.global_command_create(echo);
+
+	// /cmd
+	dpp::slashcommand cmd;
+	cmd.set_name("cmd")
+		.set_description("Run a command from the game client")
+		.set_application_id(m_bot.me.id)
+		.add_option(
+			dpp::command_option(dpp::co_string, "command", "The slash command to execute in the game client", true)
+		);
+	AddCommandPermissions(cmd);
+	m_bot.global_command_create(cmd);
+}
+
+void DiscordClient::on_interaction_create(const dpp::interaction_create_t& event)
+{
+	if (event.command.type == dpp::it_application_command)
+	{
+		// The command validates the user permission. This validates the channel.
+		auto iter = m_channels.find(event.command.channel_id);
+		if (iter == m_channels.end())
+		{
+
+		}
+
+		auto& channel = iter->second;
+		const dpp::command_interaction& cmd_data = std::get<dpp::command_interaction>(event.command.data);
+
+		if (cmd_data.name == "status")
+		{
+			fmt::memory_buffer buffer;
+			fmt::format_to(fmt::appender(buffer), "{}Status: Conected", ParseMacroDataSync(channel.prefix));
+
+			event.reply(dpp::ir_channel_message_with_source, fmt::to_string(buffer));
+			return;
+		}
+
+		if (cmd_data.name == "echo")
+		{
+			const std::string& command = std::get<std::string>(event.get_parameter("text"));
+
+			fmt::memory_buffer buffer;
+			fmt::format_to(fmt::appender(buffer), "{}{}", ParseMacroDataSync(channel.prefix), ParseMacroDataSync(command));
+
+			event.reply(dpp::ir_channel_message_with_source, fmt::to_string(buffer));
+			return;
+		}
+
+		if (cmd_data.name == "cmd")
+		{
+			const std::string& argument = std::get<std::string>(event.get_parameter("command"));
+
+			if (!channel.allow_commands)
+			{
+				fmt::memory_buffer buffer;
+				fmt::format_to(fmt::appender(buffer), "{}Commands are not allowed on this channel",
+					ParseMacroDataSync(channel.prefix));
+
+				event.reply(fmt::to_string(buffer));
+				SPDLOG_WARN("Command received on channel with commands disabled: {}", event.command.channel_id);
+				return;
+			}
+
+			DiscordExecuteCommand(event.command.channel_id, argument);
+			return;
+		}
+
+		return;
+	}
+}
+
+void DiscordClient::on_message_create(const dpp::message_create_t& event)
+{
+	// Don't respond to our own messages
+	if (event.msg.author.id == m_bot.me.id)
+	{
 		return;
 	}
 
-	// If it matches a notify, mark it to notify unless it's already blocked
-	auto notifyEvent = pClient->_blechNotifyEvents.find(ID);
-	if (notifyEvent != pClient->_blechNotifyEvents.end() && pClient->_filterMatches[notifyEvent->second] != FilterMatch::Block)
+	// handle only bot commands here
+	if (event.msg.content.length() <= 1
+		|| (event.msg.content[0] != '!' && event.msg.content[0] != '/'))
 	{
-		pClient->_filterMatches[notifyEvent->second] = FilterMatch::Notify;
 		return;
 	}
 
-	// Otherwise, it's matched an allow event, so set to allow unless it's already block or notify
-	auto pChannel = pClient->_blechAllowEvents[ID];
-	if (pClient->_filterMatches[pChannel] == FilterMatch::None)
-		pClient->_filterMatches[pChannel] = FilterMatch::Allow;
-}
+	dpp::snowflake id = event.msg.channel_id;
+	dpp::snowflake msg_id = event.msg.id;
 
-void DiscordClient::onMessageReceived(SleepyDiscord::Message& message)
-{
-	//_writeDebug("Message received: %s", message.content.c_str());
-	// Did it come from a channel we recognize?
-	auto channel = std::find_if(_channels.begin(), _channels.end(), [&](auto channel) { return message.channelID == channel.id; });
-	if (channel == _channels.end())
+	auto iter = m_channels.find(id);
+	if (iter == m_channels.end())
 	{
 		// For better or worse, this happens a fair bit due to this class only knowing about channels the current character is a part of
 		// Will always happen when a command is issued to another character
-		//_writeWarning("Message received on unknown channel: %s", message.channelID.string().c_str());
 		return;
 	}
 
-	// Basic commands
-	if (message.content == "!status")
+	auto& channel = iter->second;
+
+	if (std::find(std::begin(m_userIds), std::end(m_userIds), event.msg.author.id) == std::end(m_userIds))
 	{
-		enqueue(channel->id, _parseMacroData(channel->prefix) + "Status: Connected");
+		fmt::memory_buffer buffer;
+		fmt::format_to(fmt::appender(buffer), "{}You are not authorized to issue commands on this channel",
+			ParseMacroDataSync(channel.prefix));
+
+		event.reply(fmt::to_string(buffer));
+		SPDLOG_WARN("Command received on channel {} from unauthorized user {}", id, event.msg.author.username);
+
 		return;
 	}
-	if (message.startsWith("!echo "))
+
+	if (event.msg.content == "!status")
 	{
-		if (std::find(_userIds.begin(), _userIds.end(), static_cast<std::string>(message.author.ID)) != _userIds.end())
-			enqueue(channel->id, _parseMacroData(channel->prefix + message.content.substr(6, message.content.size() - 6)));
-		else
-		{
-			enqueue(channel->id, _parseMacroData(channel->prefix) + "You are not authorized to issue commands on this channel");
-			_writeWarning("Command received on channel %s from unauthorized user %s", channel->id.c_str(), ((std::string)message.author.ID).c_str());
-		}
+		fmt::memory_buffer buffer;
+		fmt::format_to(fmt::appender(buffer), "{}Status: Conected", ParseMacroDataSync(channel.prefix));
+
+		event.reply(fmt::to_string(buffer));
+		return;
+	}
+
+	if (starts_with(event.msg.content, "!echo "))
+	{
+		std::string_view command = std::string_view{ event.msg.content }.substr(6);
+
+		fmt::memory_buffer buffer;
+		fmt::format_to(fmt::appender(buffer), "{}{}", ParseMacroDataSync(channel.prefix), ParseMacroDataSync(command));
+
+		event.reply(fmt::to_string(buffer));
 		return;
 	}
 
 	// Ingame commands
-	if (message.startsWith("/"))
+	if (starts_with(event.msg.content, "/"))
 	{
-		if (!channel->allow_commands)
+		if (!channel.allow_commands)
 		{
-			enqueue(channel->id, _parseMacroData(channel->prefix) + "Commands are not allowed on this channel");
-			_writeWarning("Command received on channel with commands disabled: %s", channel->id.c_str());
+			fmt::memory_buffer buffer;
+			fmt::format_to(fmt::appender(buffer), "{}Commands are not allowed on this channel",
+				ParseMacroDataSync(channel.prefix));
+
+			event.reply(fmt::to_string(buffer));
+			SPDLOG_WARN("Command received on channel with commands disabled: {}", channel.id);
 			return;
 		}
-		if (std::find(_userIds.begin(), _userIds.end(), static_cast<std::string>(message.author.ID)) != _userIds.end())
-		{
-			_executeCommand(unescape_json(message.content));
-			if (channel->show_command_response > 0)
-				_responseExpiryTimes[&*channel] = std::chrono::system_clock::now() + std::chrono::milliseconds(channel->show_command_response);
-		}
-		else
-		{
-			enqueue(channel->id, _parseMacroData(channel->prefix) + "You are not authorized to issue commands on this channel");
-			_writeWarning("Command received on channel %s from unauthorized user %s", channel->id.c_str(), ((std::string)message.author.ID).c_str());
-		}
+
+		DiscordExecuteCommand(id, event.msg.content);
+		return;
 	}
 }
 
-void DiscordClient::threadStart()
+void DiscordClient::DiscordExecuteCommand(dpp::snowflake id, const std::string& command)
 {
-	try
+	auto iter = m_channels.find(id);
+	if (iter == m_channels.end())
+		return;
+
+	auto& channel = iter->second;
+
+	if (!channel.allow_commands)
+		return;
+
+	if (channel.show_command_response > 0)
 	{
-		CallbackDiscordClient client(_token, [this](auto&& PH1) { onMessageReceived(std::forward<decltype(PH1)>(PH1)); });
-		client.setIntents(SleepyDiscord::Intent::SERVER_MESSAGES);
+		std::unique_lock lock(m_responseTimesMutex);
 
-		auto clientAsync = std::async(std::launch::async, [&]() {
-			client.run();
-			});
-
-		// Give the client time to connect
-		//std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-		//if (client.isReady())
-		{
-			_writeNormal("Ready");
-
-			int count = 0;
-			while (!_stop)
-			{
-				_stopped = false;
-				// Every minute, send typing, to keep connection alive. Crude timer based on 1s sleep below
-				try
-				{
-					if (++count % 60 == 0 && !client.isRateLimited())
-					{
-						client.updateStatus();
-						for (const auto& channel : _channels)
-							client.sendTyping(channel.id);
-					}
-				}
-				// This is not so critical that it should shut things down if it doesn't work
-				catch (...) {}
-
-				// grab all queued messages, put them into a map of channel -> combined message
-				std::map<std::string, std::string> combinedMessages;
-				while (true)
-				{
-					std::tuple<std::string, std::string> message;
-					{
-						std::lock_guard<std::mutex> lock(_messagesMutex);
-						if (_messages.empty())
-							break;
-						message = _messages.front();
-						_messages.pop();
-					}
-					//combinedMessages[std::get<0>(message)] += escape_json(std::get<1>(message) + "\n");
-					combinedMessages[std::get<0>(message)] += std::get<1>(message) + '\n';
-
-					// If the message is too long, send what we currently have and grab the rest the next go through
-					if (combinedMessages[std::get<0>(message)].length() > 1800)
-						break;
-				}
-
-				for (const auto& kvp : combinedMessages)
-				{
-					while (true)
-					{
-						try
-						{
-							const std::string messageResponse = client.sendMessage(kvp.first, kvp.second).text;
-							_writeDebug(messageResponse.c_str());
-							if (messageResponse.empty())
-							{
-								_writeError("Failed to send discord message to: %s", kvp.first.c_str());
-							}
-							break;
-						}
-						catch (SleepyDiscord::ErrorCode& e)
-						{
-							// If we're rate limited, back off a bit and try again shortly. Otherwise, bail out
-							if (e == SleepyDiscord::TOO_MANY_REQUESTS || e == SleepyDiscord::RATE_LIMITED)
-								std::this_thread::sleep_for(std::chrono::milliseconds(200));
-							else
-							{
-								_writeError("\ar%s\aw - %s", errorString(e).c_str(), errorDesc(e).c_str());
-								break;
-							}
-						}
-					}
-				}
-
-				std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-			}
-			_writeNormal("Disconnecting...");
-		}
-		/*else
-		{
-			_writeError("Could not connect to Discord.");
-		}*/
-		client.quit();
-		_stopped = true;
+		m_responseExpiryTimes[id] = std::chrono::steady_clock::now()
+			+ std::chrono::milliseconds(channel.show_command_response);
 	}
-	catch (std::exception& e)
+
 	{
-		_writeError("Exception in thread, %s", e.what());
-	}
-	catch (...)
-	{
-		auto e = std::current_exception();
-		_writeError("Unknown error in thread");
+		std::unique_lock lock(globalDataMutex);
+
+		//m_executeCommand(unescape_json(message.content));
+		EzCommand(command.c_str());
 	}
 }
 
-//============================================================================
+void DiscordClient::EnqueueIfMatch(const std::string& message)
+{
+	// Clear results & set every channel to no match initially
+	m_filterMatches.clear();
 
-} // namespace MQ2Discord
+	for (const auto& [id, _] : m_channels)
+		m_filterMatches[id] = FilterMatch::None;
+
+	// Feed the message through the parser. Colour codes are removed beforehand.
+	char buffer[2048] = { 0 };
+	StripMQChat(message.c_str(), buffer);
+	m_blech->Feed(buffer);
+
+	// Send to any channels that matched
+	for (const auto& [id, filter] : m_filterMatches)
+	{
+		auto& channel = m_channels[id];
+
+		if (channel.show_command_response > 0)
+		{
+			std::unique_lock lock(m_responseTimesMutex);
+
+			if (m_responseExpiryTimes.find(id) != m_responseExpiryTimes.end()
+				&& m_responseExpiryTimes[id] > std::chrono::steady_clock::now())
+			{
+				Enqueue(id, ParseMacroDataSync(channel.prefix) + escape_markdown(message));
+				continue;
+			}
+		}
+
+		if (filter == FilterMatch::Allow)
+		{
+			Enqueue(id, ParseMacroDataSync(channel.prefix) + escape_markdown(message));
+			continue;
+		}
+		
+		if (filter == FilterMatch::Notify)
+		{
+			Enqueue(id, ParseMacroDataSync(channel.prefix) + escape_markdown(message) + " @everyone");
+			continue;
+		}
+	}
+}
+
+void DiscordClient::EnqueueAll(std::string_view message)
+{
+	std::unique_lock lock(m_mutex);
+
+	for (const auto& [id, channel] : m_channels)
+	{
+		fmt::memory_buffer buffer;
+		fmt::format_to(fmt::appender(buffer), "{}{}", ParseMacroDataSync(channel.prefix), message);
+
+		m_queuedMessages.emplace(id, fmt::to_string(buffer));
+	}
+}
+
+void DiscordClient::Enqueue(dpp::snowflake channelId, std::string_view message)
+{
+	std::unique_lock lock(m_mutex);
+
+	m_queuedMessages.emplace(channelId, std::string(message));
+}
+
+// Callback function for blech parser match
+void __stdcall BlechMatch(unsigned int ID, void* pData, PBLECHVALUE pValues)
+{
+	auto pClient = static_cast<DiscordClient*>(pData);
+	pClient->HandleBlechEvent(ID);
+}
+
+void DiscordClient::HandleBlechEvent(uint32_t ID)
+{
+	// If it matched a block filter, mark it as blocked regardless of what it was before
+	auto blockEvent = m_blechBlockEvents.find(ID);
+	if (blockEvent != m_blechBlockEvents.end())
+	{
+		m_filterMatches[blockEvent->second] = FilterMatch::Block;
+		return;
+	}
+
+	// If it matches a notify, mark it to notify unless it's already blocked
+	auto notifyEvent = m_blechNotifyEvents.find(ID);
+	if (notifyEvent != m_blechNotifyEvents.end() && m_filterMatches[notifyEvent->second] != FilterMatch::Block)
+	{
+		m_filterMatches[notifyEvent->second] = FilterMatch::Notify;
+		return;
+	}
+
+	// Otherwise, it's matched an allow event, so set to allow unless it's already block or notify
+	dpp::snowflake channelId = m_blechAllowEvents[ID];
+	if (m_filterMatches[channelId] == FilterMatch::None)
+		m_filterMatches[channelId] = FilterMatch::Allow;
+}

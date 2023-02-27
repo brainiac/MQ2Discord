@@ -8,17 +8,15 @@
 
 struct ChannelConfig
 {
-	ChannelConfig() : allow_commands(false), send_connected(true), show_command_response(2000) { }
-
 	std::string name;
 	std::string id;
 	std::vector<std::string> allowed;
 	std::vector<std::string> blocked;
 	std::vector<std::string> notify;
 	std::string prefix;
-	bool send_connected;
-	bool allow_commands;
-	uint32_t show_command_response;
+	bool send_connected = true;
+	bool allow_commands = false;
+	uint32_t show_command_response = 2000;
 };
 
 struct GroupConfig
@@ -80,20 +78,17 @@ struct DiscordConfig
 				if (!std::regex_match(channel.id, idRegex))
 					results.push_back("Channel id \ay" + channel.id + "\aw in group \ay" + group.name + "\aw looks wrong");
 
-/*
-		const std::regex tokenRegex(R"(.*[\w\-_]{24}\.[\w\-_]{6}\.[\w\-_]{27,}.*)");
-		if (!std::regex_match(token, tokenRegex))
-			results.push_back("Invalid token");
-*/
-
 		return results;
 	}
 };
 
-namespace YAML {
+namespace YAML
+{
 	template<>
-	struct convert<DiscordConfig> {
-		static Node encode(const DiscordConfig& rhs) {
+	struct convert<DiscordConfig>
+	{
+		static Node encode(const DiscordConfig& rhs)
+		{
 			Node node;
 			node["token"] = rhs.token;
 			node["user_ids"] = rhs.user_ids;
@@ -102,12 +97,15 @@ namespace YAML {
 			node["classes"] = rhs.classes;
 			node["groups"] = rhs.groups;
 			node["all"] = rhs.all;
+
 			return node;
 		}
 
-		static bool decode(const Node& node, DiscordConfig& rhs) {
+		static bool decode(const Node& node, DiscordConfig& rhs)
+		{
 			rhs.token = node["token"].as<std::string>();
 			rhs.user_ids = node["user_ids"].as<std::vector<std::string>>();
+
 			if (node["characters"])
 				rhs.characters = node["characters"].as<std::map<std::string, std::vector<ChannelConfig>>>();
 			if (node["servers"])
@@ -118,13 +116,16 @@ namespace YAML {
 				rhs.groups = node["groups"].as<std::vector<GroupConfig>>();
 			if (node["all"])
 				rhs.all = node["all"].as<std::vector<ChannelConfig>>();
+
 			return true;
 		}
 	};
 
 	template<>
-	struct convert<ChannelConfig> {
-		static Node encode(const ChannelConfig& rhs) {
+	struct convert<ChannelConfig>
+	{
+		static Node encode(const ChannelConfig& rhs)
+		{
 			Node node;
 			node["name"] = rhs.name;
 			node["id"] = rhs.id;
@@ -135,11 +136,14 @@ namespace YAML {
 			node["send_connected"] = rhs.send_connected;
 			node["allow_commands"] = rhs.allow_commands;
 			node["show_command_response"] = rhs.show_command_response;
+
 			return node;
 		}
 
-		static bool decode(const Node& node, ChannelConfig& rhs) {
+		static bool decode(const Node& node, ChannelConfig& rhs)
+		{
 			rhs.id = node["id"].as<std::string>();
+
 			if (node["name"])
 				rhs.name = node["name"].as<std::string>();
 			if (node["allowed"])
@@ -156,13 +160,16 @@ namespace YAML {
 				rhs.allow_commands = node["allow_commands"].as<bool>();
 			if (node["show_command_response"])
 				rhs.show_command_response = node["show_command_response"].as<uint32_t>();
+
 			return true;
 		}
 	};
 
 	template<>
-	struct convert<GroupConfig> {
-		static Node encode(const GroupConfig& rhs) {
+	struct convert<GroupConfig>
+	{
+		static Node encode(const GroupConfig& rhs)
+		{
 			Node node;
 			node["name"] = rhs.name;
 			node["characters"] = rhs.characters;
@@ -170,13 +177,15 @@ namespace YAML {
 			return node;
 		}
 
-		static bool decode(const Node& node, GroupConfig& rhs) {
+		static bool decode(const Node& node, GroupConfig& rhs)
+		{
 			if (node["name"])
 				rhs.name = node["name"].as<std::string>();
 			if (node["characters"])
 				rhs.characters = node["characters"].as<std::vector<std::string>>();
 			if (node["channels"])
 				rhs.channels = node["channels"].as<std::vector<ChannelConfig>>();
+
 			return true;
 		}
 	};

@@ -1,4 +1,4 @@
 asio
-sleepy-discord
 yaml-cpp
 curl[non-http,ssl,schannel]
+dpp:x64-windows

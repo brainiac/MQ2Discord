@@ -1,37 +1,117 @@
+
 #include "DiscordClient.h"
 #include "Config.h"
+
 #include <fstream>
 #include <regex>
-#include <yaml-cpp\yaml.h>
+#include <yaml-cpp/yaml.h>
 #include <filesystem>
 
 #include <mq/Plugin.h>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/base_sink.h>
+#include <spdlog/sinks/msvc_sink.h>
 
 PreSetup("MQ2Discord");
-PLUGIN_VERSION(1.1);
+PLUGIN_VERSION(2.0);
 
-// MQ2Main isn't nice enough to export this
-unsigned int __stdcall MQ2DataVariableLookup(char * VarName, char * Value, size_t ValueLen)
-{
-	strcpy_s(Value, ValueLen, VarName);
-	if (!pLocalPlayer)
-		return (uint32_t)strlen(Value);
-	return (uint32_t)strlen(ParseMacroParameter((PSPAWNINFO)pLocalPlayer, Value, ValueLen));
-}
+#define PLUGIN_MSG_LOG(x) x "[Discord]\ax "
 
-VOID DiscordCmd(PSPAWNINFO pChar, PCHAR szLine);
+void DiscordCmd(PSPAWNINFO pChar, PCHAR szLine);
 void Reload();
 
-std::unique_ptr<MQ2Discord::DiscordClient> client;
-bool disabled = false;
-bool debug = false;
-std::queue<std::string> commands;
-std::mutex commandsMutex;
+static bool s_ourMessage = false;
+static bool s_showDebug = true;
+static std::unique_ptr<DiscordClient> s_client;
+
 std::queue<std::string> messages;
 std::mutex messagesMutex;
 DWORD mainThreadId;
 
-void OutputMessage(const char * prepend, const char * format, va_list args)
+std::recursive_mutex globalDataMutex;
+
+template<typename M>
+class unique_unlock
+{
+public:
+	unique_unlock(M& m) noexcept(false) : m_(m) {
+		m_.unlock();
+	}
+	~unique_unlock() {
+		m_.lock();
+	}
+private:
+	M& m_;
+};
+
+class WriteChatSink : public spdlog::sinks::base_sink<spdlog::details::null_mutex>
+{
+protected:
+	void sink_it_(const spdlog::details::log_msg& msg) override
+	{
+		using namespace spdlog;
+
+		fmt::memory_buffer formatted;
+		switch (msg.level)
+		{
+		case level::critical:
+		case level::err:
+			fmt::format_to(fmt::appender(formatted), PLUGIN_MSG_LOG("\ar") "{}", msg.payload);
+			break;
+
+		case level::trace:
+		case level::debug:
+			fmt::format_to(fmt::appender(formatted), PLUGIN_MSG_LOG("\a#7f7f7f") "{}", msg.payload);
+			break;
+
+		case level::warn:
+			fmt::format_to(fmt::appender(formatted), PLUGIN_MSG_LOG("\ay") "{}", msg.payload);
+			break;
+
+		case level::info:
+		default:
+			fmt::format_to(fmt::appender(formatted), PLUGIN_MSG_LOG("\ag") "{}", msg.payload);
+			break;
+		}
+
+		s_ourMessage = true;
+		WriteChatf("%.*s", formatted.size(), formatted.data());
+		s_ourMessage = false;
+	}
+
+	void flush_() override {}
+};
+
+void InitializeLogging()
+{
+	// set up default logger
+	auto logger = spdlog::create<WriteChatSink>("MQ2Discord");
+	logger->set_level(s_showDebug ? spdlog::level::trace : spdlog::level::info);
+
+#if defined(_DEBUG)
+	logger->sinks().push_back(std::make_shared<spdlog::sinks::msvc_sink_mt>());
+#endif
+	spdlog::set_default_logger(logger);
+	spdlog::set_pattern("%L %Y-%m-%d %T.%f [%n] %v (%@)");
+	spdlog::flush_on(spdlog::level::trace);
+}
+
+void ShutdownLogging()
+{
+	spdlog::shutdown();
+}
+
+uint32_t __stdcall MQ2DataVariableLookup(char* VarName, char* Value, size_t ValueLen)
+{
+	strcpy_s(Value, ValueLen, VarName);
+
+	if (!pLocalPlayer)
+		return (uint32_t)strlen(Value);
+
+	return (uint32_t)strlen(ParseMacroParameter(pLocalPlayer, Value, ValueLen));
+}
+
+void OutputMessage(const char* prepend, const char* format, va_list args)
 {
 	char output[MAX_STRING];
 	strcpy_s(output, prepend);
@@ -40,9 +120,9 @@ void OutputMessage(const char * prepend, const char * format, va_list args)
 	// If we're on the main thread write direct, otherwise queue it
 	if (GetCurrentThreadId() == mainThreadId)
 	{
-		disabled = true;
+		s_ourMessage = true;
 		WriteChatf(output);
-		disabled = false;
+		s_ourMessage = false;
 	}
 	else
 	{
@@ -53,7 +133,7 @@ void OutputMessage(const char * prepend, const char * format, va_list args)
 
 void OutputDebug(const char * format, ...)
 {
-	if (debug)
+	if (s_showDebug)
 	{
 		va_list args;
 		va_start(args, format);
@@ -82,13 +162,13 @@ void OutputNormal(const char * format, ...)
 {
 	va_list args;
 	va_start(args, format);
-	OutputMessage("\ag[MQ2Discord] \aw ", format, args);
+	OutputMessage("\ag[MQ2Discord] \aw", format, args);
 	va_end(args);
 }
 
 void ProcessMessage(std::string Message)
 {
-	if (client && !disabled && GetGameState() == GAMESTATE_INGAME)
+	if (s_client && !s_ourMessage && GetGameState() == GAMESTATE_INGAME)
 	{
 		char myMessage[MAX_STRING] = { 0 };
 		strcpy_s(myMessage, Message.c_str());
@@ -96,23 +176,20 @@ void ProcessMessage(std::string Message)
 		StripTextLinks(myMessage);
 		// Resize the string to match the first null terminator.
 		//Message.erase(std::find(Message.begin(), Message.end(), '\0'), Message.end());
-		client->enqueueIfMatch(myMessage);
+		s_client->EnqueueIfMatch(myMessage);
 	}
 }
 
-std::string ParseMacroDataString(const std::string& input)
+std::string ParseMacroDataString(std::string_view input)
 {
+	if (input.empty())
+		return std::string();
+
 	char buffer[MAX_STRING] = { 0 };
-	strcpy_s(buffer, input.c_str());
+	strncpy_s(buffer, input.data(), input.size());
+
 	ParseMacroData(buffer, MAX_STRING);
 	return buffer;
-}
-
-void OnCommand(std::string command)
-{
-	OutputDebug("OnCommand: %s", command.c_str());
-	std::lock_guard<std::mutex> _lock(commandsMutex);
-	commands.emplace(command);
 }
 
 void SetDefaults(DiscordConfig& config)
@@ -169,16 +246,18 @@ DiscordConfig GetConfig()
 {
 	// Load existing config if it exists
 	const std::filesystem::path configFile = std::filesystem::path(gPathConfig) / "MQ2Discord.yaml";
+
 	std::error_code ec_exists;
 	if (std::filesystem::exists(configFile, ec_exists))
 		return YAML::LoadFile(configFile.string()).as<DiscordConfig>();
 
 	// If old .json configs exist, convert them
 	std::map<std::string, YAML::Node> jsonConfigs;
-	for (const auto & file : std::filesystem::directory_iterator(gPathConfig))
+	for (const auto& file : std::filesystem::directory_iterator(gPathConfig))
 	{
 		const auto filename = file.path().filename().string();
 		const std::regex re("MQ2Discord_(.*)\\.json");
+
 		std::smatch matches;
 		if (std::regex_match(filename, matches, re))
 			jsonConfigs[matches[1]] = YAML::LoadFile(file.path().string());
@@ -229,13 +308,14 @@ DiscordConfig GetConfig()
 	SetDefaults(config);
 	WriteConfig(config, configFile.string());
 	OutputNormal("Created a default configuration. Edit this, then do \ag/discord reload");
+
 	return config;
 }
 
 void Reload()
 {
-	if (client)
-		client.reset();
+	if (s_client)
+		s_client.reset();
 
 	DiscordConfig config;
 	try
@@ -320,7 +400,10 @@ void Reload()
 				filter = "#*#" + filter + "#*#";
 	}
 
-	client = std::make_unique<MQ2Discord::DiscordClient>(config.token, config.user_ids, channels, OnCommand, ParseMacroDataString, OutputError, OutputWarning, OutputNormal, OutputDebug);
+	s_client = std::make_unique<DiscordClient>(
+		std::move(config),
+		std::move(channels)
+	);
 }
 
 void DiscordCmd(PSPAWNINFO pChar, PCHAR szLine)
@@ -335,12 +418,14 @@ void DiscordCmd(PSPAWNINFO pChar, PCHAR szLine)
 	}
 	else if (!_stricmp(buffer, "stop"))
 	{
-		client->Stop();
+		//client->Stop();
 	}
 	else if (!_stricmp(buffer, "debug"))
 	{
-		debug = !debug;
-		OutputNormal("Debug is now: %s\ax", debug ? "\agON" : "\arOFF");
+		s_showDebug = !s_showDebug;
+		spdlog::set_level(s_showDebug ? spdlog::level::trace : spdlog::level::info);
+
+		OutputNormal("Debug is now: %s\ax", s_showDebug ? "\agON" : "\arOFF");
 	}
 	else if (!_stricmp(buffer, "process"))
 	{
@@ -350,7 +435,7 @@ void DiscordCmd(PSPAWNINFO pChar, PCHAR szLine)
 		{
 			strLine = strLine.substr((strBuffer).length() + 1);
 			OutputDebug("Processing: %s", strLine.c_str());
-			ProcessMessage(strLine);
+			ProcessMessage(std::move(strLine));
 		}
 		else
 		{
@@ -365,38 +450,29 @@ void DiscordCmd(PSPAWNINFO pChar, PCHAR szLine)
 
 PLUGIN_API void InitializePlugin()
 {
+	InitializeLogging();
+
 	mainThreadId = GetCurrentThreadId();
 	AddCommand("/discord", DiscordCmd);
+
+	globalDataMutex.lock();
 }
 
 PLUGIN_API void ShutdownPlugin()
 {
-	if (client)
-	{
-		client->Stop();
-		while(!client->IsStopped())
-		{
-			// Wait until client is stopped.
-		}
-		client.reset();
-	}
+	globalDataMutex.unlock();
+
+	s_client.reset();
 	RemoveCommand("/discord");
+
+	ShutdownLogging();
 }
 
 PLUGIN_API void OnPulse()
 {
-	// Execute any queued commands
-	while (true)
-	{
-		std::lock_guard<std::mutex> lock(commandsMutex);
-
-		if (commands.empty())
-			break;
-
-		OutputDebug("OnPulse: %s", commands.front().c_str());
-		EzCommand(commands.front().c_str());
-		commands.pop();
-	}
+	// While we are processing events in the discord client, unlock the mutex
+	// so that it can run calls against the main thread.
+	unique_unlock unlock(globalDataMutex);
 
 	// Output any queued messages
 	while (true)
@@ -406,12 +482,16 @@ PLUGIN_API void OnPulse()
 		if (messages.empty())
 			break;
 
-		disabled = true;
+		s_ourMessage = true;
 		WriteChatf(messages.front().c_str());
-		disabled = false;
+		s_ourMessage = false;
 		messages.pop();
 	}
 
+	if (s_client)
+	{
+		s_client->ProcessEvents();
+	}
 }
 
 PLUGIN_API void OnWriteChatColor(const char* Line, int Color, int Filter)
@@ -433,10 +513,10 @@ PLUGIN_API void SetGameState(int GameState)
 	}
 	else
 	{
-		if (client)
+		if (s_client)
 		{
-			client->enqueueAll("Disconnecting, no longer in game");
-			client.reset();
+			s_client->EnqueueAll("Disconnecting, no longer in game");
+			s_client.reset();
 		}
 	}
 }
